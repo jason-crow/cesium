@@ -479,7 +479,7 @@ define([
 
     Cesium3DTileBatchTable.prototype.getColor = function(batchId, result) {
         //>>includeStart('debug', pragmas.debug);
-        checkBatchId(batchId, this.featuresLength);
+        //checkBatchId(batchId, this.featuresLength);
         Check.typeOf.object('result', result);
         //>>includeEnd('debug');
 
