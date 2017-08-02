@@ -30,6 +30,13 @@ var aws = require('aws-sdk');
 var mime = require('mime');
 var compressible = require('compressible');
 
+var concat = require('gulp-concat');
+var minifyStyles = require('gulp-minify-css');
+var autoprefixer = require('gulp-autoprefixer');
+var HtmlWebpackPlugin = require('html-webpack-plugin');
+var webpack = require('webpack');
+var WebpackDevServer = require("webpack-dev-server");
+
 var packageJson = require('./package.json');
 var version = packageJson.version;
 if (/\.0$/.test(version)) {
@@ -97,6 +104,25 @@ var filesToSortRequires = ['Source/**/*.js',
                            '!Apps/Sandcastle/gallery/gallery-index.js'];
 
 gulp.task('default', ['combine']);
+
+gulp.task('loadCss', function(){
+    gulp.src('Source/**/*.css')
+        .pipe(minifyStyles())
+        .pipe(autoprefixer('last 2 version', 'safari 5', 'ie 8', 'ie 9'))
+        .pipe(concat('Cesium.min.css'))
+        .pipe(gulp.dest('Source'))
+});
+
+gulp.task("webpack-dev-server", ['build', 'loadCss'], function(callback) {
+    // Start a webpack-dev-server
+    var compiler = webpack(require('./webpack.config.js'));
+
+    new WebpackDevServer(compiler, {
+
+    }).listen(8087, "localhost", function(err) {
+        if(err) throw new gutil.PluginError("webpack-dev-server", err);
+    });
+});
 
 gulp.task('build', function(done) {
     mkdirp.sync('Build');
