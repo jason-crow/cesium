@@ -847,6 +847,15 @@ define([
         }
     }
 
+    function queueInvertCommands(frameState, commands) {
+        // Only set stencil buffer for classified geometry, skip color draw command.
+        var commandList = frameState.commandList;
+        var commandLength = commands.length;
+        for (var i = 0; i < commandLength; i += 3) {
+            commandList.push(commands[i], commands[i + 1]);
+        }
+    }
+
     function queueWireframeCommands(frameState, commands) {
         var commandList = frameState.commandList;
         var commandLength = commands.length;
@@ -906,6 +915,8 @@ define([
 
             if (this._debugWireframe) {
                 queueWireframeCommands(frameState, this._commands);
+            } else if (frameState.invertClassification) {
+                queueInvertCommands(frameState, this._commands);
             } else {
                 queueCommands(frameState, this._commands);
             }
