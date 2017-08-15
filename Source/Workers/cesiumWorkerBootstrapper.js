@@ -317,7 +317,7 @@ var requirejs, require, define;
                     name = normalizedBaseParts.concat(name);
                 }
 
-                trimDots(name);
+                //trimDots(name);
                 name = name.join('/');
             }
 
