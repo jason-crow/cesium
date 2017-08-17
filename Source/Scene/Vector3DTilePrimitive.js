@@ -101,6 +101,7 @@ define([
 
         this._va = undefined;
         this._sp = undefined;
+        this._spStencil = undefined;
         this._spPick = undefined;
         this._uniformMap = undefined;
 
@@ -114,6 +115,7 @@ define([
         this._rsWireframe = undefined;
 
         this._commands = [];
+        this._commandsIgnoreShow = [];
         this._pickCommands = [];
 
         this._constantColor = Color.clone(Color.WHITE);
@@ -222,8 +224,24 @@ define([
             attributeLocations : attributeLocations
         });
 
-        vsSource = batchTable.getPickVertexShaderCallback('a_batchId')(ShadowVolumeVS);
-        fsSource = batchTable.getPickFragmentShaderCallback()(ShadowVolumeFS);
+        vs = new ShaderSource({
+            defines : ['VECTOR_TILE'],
+            sources : [ShadowVolumeVS]
+        });
+        fs = new ShaderSource({
+            defines : ['VECTOR_TILE'],
+            sources : [ShadowVolumeFS]
+        });
+
+        primitive._spStencil = ShaderProgram.fromCache({
+            context : context,
+            vertexShaderSource : vs,
+            fragmentShaderSource : fs,
+            attributeLocations : attributeLocations
+        });
+
+        vsSource = batchTable.getPickVertexShaderCallbackIgnoreShow('a_batchId')(ShadowVolumeVS);
+        fsSource = batchTable.getPickFragmentShaderCallbackIgnoreShow()(ShadowVolumeFS);
 
         var pickVS = new ShaderSource({
             defines : ['VECTOR_TILE'],
@@ -621,6 +639,36 @@ define([
             colorCommand.boundingVolume = bv;
             colorCommand.pass = Pass.GROUND;
         }
+
+        primitive._commandsDirty = true;
+    }
+
+    function createColorCommandsIgnoreShow(primitive, frameState) {
+        if (!frameState.invertClassification || (defined(primitive._commandsIgnoreShow) && !primitive._commandsDirty)) {
+            return;
+        }
+
+        var commands = primitive._commands;
+        var commandsIgnoreShow = primitive._commandsIgnoreShow;
+        var spStencil = primitive._spStencil;
+
+        var commandsLength = commands.length;
+        var length = commandsIgnoreShow.length = commandsLength / 3 * 2;
+
+        var commandIndex = 0;
+        for (var j = 0; j < length; j += 2) {
+            var commandIgnoreShow = commandsIgnoreShow[j] = DrawCommand.shallowClone(commands[commandIndex], commandsIgnoreShow[j]);
+            commandIgnoreShow.shaderProgram = spStencil;
+            commandIgnoreShow.pass = Pass.GROUND_IGNORE_SHOW;
+
+            commandIgnoreShow = commandsIgnoreShow[j + 1] = DrawCommand.shallowClone(commands[commandIndex + 1], commandsIgnoreShow[j + 1]);
+            commandIgnoreShow.shaderProgram = spStencil;
+            commandIgnoreShow.pass = Pass.GROUND_IGNORE_SHOW;
+
+            commandIndex += 3;
+        }
+
+        primitive._commandsDirty = false;
     }
 
     function createPickCommands(primitive) {
@@ -633,7 +681,7 @@ define([
         pickCommands.length = length * 3;
 
         var vertexArray = primitive._va;
-        var sp = primitive._sp;
+        var spStencil = primitive._spStencil;
         var spPick = primitive._spPick;
         var modelMatrix = Matrix4.IDENTITY;
         var uniformMap = primitive._batchTable.getPickUniformMapCallback()(primitive._uniformMap);
@@ -660,7 +708,7 @@ define([
             stencilPreloadCommand.offset = offset;
             stencilPreloadCommand.count = count;
             stencilPreloadCommand.renderState = primitive._rsStencilPreloadPass;
-            stencilPreloadCommand.shaderProgram = sp;
+            stencilPreloadCommand.shaderProgram = spStencil;
             stencilPreloadCommand.uniformMap = uniformMap;
             stencilPreloadCommand.boundingVolume = bv;
             stencilPreloadCommand.pass = Pass.GROUND;
@@ -677,7 +725,7 @@ define([
             stencilDepthCommand.offset = offset;
             stencilDepthCommand.count = count;
             stencilDepthCommand.renderState = primitive._rsStencilDepthPass;
-            stencilDepthCommand.shaderProgram = sp;
+            stencilDepthCommand.shaderProgram = spStencil;
             stencilDepthCommand.uniformMap = uniformMap;
             stencilDepthCommand.boundingVolume = bv;
             stencilDepthCommand.pass = Pass.GROUND;
@@ -839,20 +887,21 @@ define([
         this._batchDirty = true;
     };
 
-    function queueCommands(frameState, commands) {
+    function queueCommands(frameState, commands, commandsIgnoreShow) {
         var commandList = frameState.commandList;
         var commandLength = commands.length;
-        for (var i = 0; i < commandLength; ++i) {
+        var i;
+        for (i = 0; i < commandLength; ++i) {
             commandList.push(commands[i]);
         }
-    }
 
-    function queueInvertCommands(frameState, commands) {
-        // Only set stencil buffer for classified geometry, skip color draw command.
-        var commandList = frameState.commandList;
-        var commandLength = commands.length;
-        for (var i = 0; i < commandLength; i += 3) {
-            commandList.push(commands[i], commands[i + 1]);
+        if (!frameState.invertClassification || !defined(commandsIgnoreShow)) {
+            return;
+        }
+
+        commandLength = commandsIgnoreShow.length;
+        for (i = 0; i < commandLength; ++i) {
+            commandList.push(commandsIgnoreShow[i]);
         }
     }
 
@@ -911,14 +960,13 @@ define([
         var passes = frameState.passes;
         if (passes.render) {
             createColorCommands(this, context);
+            createColorCommandsIgnoreShow(this, frameState);
             updateWireframe(this);
 
             if (this._debugWireframe) {
                 queueWireframeCommands(frameState, this._commands);
-            } else if (frameState.invertClassification) {
-                queueInvertCommands(frameState, this._commands);
             } else {
-                queueCommands(frameState, this._commands);
+                queueCommands(frameState, this._commands, this._commandsIgnoreShow);
             }
         }
 

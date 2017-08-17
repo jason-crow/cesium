@@ -2001,9 +2001,9 @@ define([
                 }
 
                 // Set stencil
-                us.updatePass(Pass.GROUND);
-                commands = frustumCommands.commands[Pass.GROUND];
-                length = frustumCommands.indices[Pass.GROUND];
+                us.updatePass(Pass.GROUND_IGNORE_SHOW);
+                commands = frustumCommands.commands[Pass.GROUND_IGNORE_SHOW];
+                length = frustumCommands.indices[Pass.GROUND_IGNORE_SHOW];
                 for (j = 0; j < length; ++j) {
                     executeCommand(commands[j], scene, context, passState);
                 }
@@ -2014,6 +2014,25 @@ define([
                 length = frustumCommands.indices[Pass.CESIUM_3D_TILE];
                 for (j = 0; j < length; ++j) {
                     executeCommand(commands[j], scene, context, passState, undefined, false, true);
+                }
+
+                scene._stencilClearCommand.execute(context, passState);
+
+                // Draw style over opaque classification.
+                // Clears stencil.
+                us.updatePass(Pass.GROUND);
+                commands = frustumCommands.commands[Pass.GROUND];
+                length = frustumCommands.indices[Pass.GROUND];
+                for (j = 0; j < length; ++j) {
+                    executeCommand(commands[j], scene, context, passState);
+                }
+
+                // Reset stencil
+                us.updatePass(Pass.GROUND_IGNORE_SHOW);
+                commands = frustumCommands.commands[Pass.GROUND_IGNORE_SHOW];
+                length = frustumCommands.indices[Pass.GROUND_IGNORE_SHOW];
+                for (j = 0; j < length; ++j) {
+                    executeCommand(commands[j], scene, context, passState);
                 }
             }
 
