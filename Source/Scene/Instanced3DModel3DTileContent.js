@@ -456,7 +456,8 @@ define([
         if (!defined(content._features) && (featuresLength > 0)) {
             var features = new Array(featuresLength);
             for (var i = 0; i < featuresLength; ++i) {
-                features[i] = new Cesium3DTileFeature(tileset, content, i);
+                var batchId = content._modelInstanceCollection._instances[i]._instanceId;
+                features[i] = new Cesium3DTileFeature(tileset, content, batchId);
             }
             content._features = features;
         }
