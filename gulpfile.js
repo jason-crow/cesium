@@ -96,6 +96,38 @@ var filesToSortRequires = ['Source/**/*.js',
                            '!Apps/Sandcastle/Sandcastle-warn.js',
                            '!Apps/Sandcastle/gallery/gallery-index.js'];
 
+var webpack = require('webpack');
+var WebpackDevServer = require("webpack-dev-server");
+var webpackStream = require('webpack-stream');
+var open = require('open');
+var config = require('./webpack.config');
+var port_number = '8081';
+var target_entry = 'http://localhost:' + port_number + '/Apps/WebpackDemo';
+config.entry.unshift("webpack-dev-server/client?" + target_entry);
+
+gulp.task('webpack-server', ['build'], function(done) {
+    // Start a webpack-dev-server
+    var compiler = webpack(config);
+
+    new WebpackDevServer(compiler, {
+        stats: {
+            colors: true
+        },
+        publicPath: '/Apps/WebpackDemo'
+    }).listen(port_number, "localhost", function(err) {
+        if(err) throw new gutil.PluginError("webpack-dev-server", err);
+        console.log('Listening at localhost:' + port_number );
+        console.log('Opening your system browser...');
+        open(target_entry);
+    });
+});
+
+gulp.task('webpack', ['build'], function() {
+    return gulp.src('Source/Cesium.js')
+      .pipe(webpackStream(config, webpack))
+      .pipe(gulp.dest('Apps/WebpackDemo/'));
+  });
+
 gulp.task('default', ['combine']);
 
 gulp.task('build', function(done) {
