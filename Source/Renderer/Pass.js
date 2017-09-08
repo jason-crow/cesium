@@ -20,9 +20,15 @@ define([
         ENVIRONMENT : 0,
         COMPUTE : 1,
         GLOBE : 2,
+<<<<<<< HEAD
         CESIUM_3D_TILE : 3,
         GROUND_IGNORE_SHOW : 4,
         GROUND : 5,
+=======
+        TERRAIN_CLASSIFICATION : 3,
+        CESIUM_3D_TILE : 4,
+        CESIUM_3D_TILE_CLASSIFICATION : 5,
+>>>>>>> b1b8894641ecd450723e727803ae24d551c93528
         OPAQUE : 6,
         TRANSLUCENT : 7,
         OVERLAY : 8,

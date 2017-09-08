@@ -1971,6 +1971,7 @@ define([
                 executeCommand(commands[j], scene, context, passState);
             }
 
+<<<<<<< HEAD
             if (!scene.frameState.invertClassification || picking) {
                 // Common/fastest path. Draw 3D Tiles and classification normally.
 
@@ -2072,6 +2073,8 @@ define([
                 }
             }
 
+=======
+>>>>>>> b1b8894641ecd450723e727803ae24d551c93528
             if (defined(globeDepth) && environmentState.useGlobeDepthFramebuffer && (scene.copyGlobeDepth || scene.debugShowGlobeDepth)) {
                 globeDepth.update(context, passState);
                 globeDepth.executeCopyDepth(context, passState);
@@ -2081,16 +2084,50 @@ define([
                 passState.framebuffer = fb;
             }
 
+<<<<<<< HEAD
             if (clearGlobeDepth) {
                 clearDepth.execute(context, passState);
                 if (useDepthPlane) {
                     depthPlane.execute(context, passState);
                 }
+=======
+            us.updatePass(Pass.TERRAIN_CLASSIFICATION);
+            commands = frustumCommands.commands[Pass.TERRAIN_CLASSIFICATION];
+            length = frustumCommands.indices[Pass.TERRAIN_CLASSIFICATION];
+            for (j = 0; j < length; ++j) {
+                executeCommand(commands[j], scene, context, passState);
+            }
+
+            if (clearGlobeDepth) {
+                clearDepth.execute(context, passState);
+            }
+
+            us.updatePass(Pass.CESIUM_3D_TILE);
+            commands = frustumCommands.commands[Pass.CESIUM_3D_TILE];
+            length = frustumCommands.indices[Pass.CESIUM_3D_TILE];
+            for (j = 0; j < length; ++j) {
+                executeCommand(commands[j], scene, context, passState);
+            }
+
+            if (length > 0 && context.stencilBuffer) {
+                scene._stencilClearCommand.execute(context, passState);
+            }
+
+            us.updatePass(Pass.CESIUM_3D_TILE_CLASSIFICATION);
+            commands = frustumCommands.commands[Pass.CESIUM_3D_TILE_CLASSIFICATION];
+            length = frustumCommands.indices[Pass.CESIUM_3D_TILE_CLASSIFICATION];
+            for (j = 0; j < length; ++j) {
+                executeCommand(commands[j], scene, context, passState);
+            }
+
+            if (clearGlobeDepth && useDepthPlane) {
+                depthPlane.execute(context, passState);
+>>>>>>> b1b8894641ecd450723e727803ae24d551c93528
             }
 
             // Execute commands in order by pass up to the translucent pass.
             // Translucent geometry needs special handling (sorting/OIT).
-            var startPass = Pass.GROUND + 1;
+            var startPass = Pass.CESIUM_3D_TILE_CLASSIFICATION + 1;
             var endPass = Pass.TRANSLUCENT;
             for (var pass = startPass; pass < endPass; ++pass) {
                 us.updatePass(pass);
