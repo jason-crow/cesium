@@ -1971,110 +1971,6 @@ define([
                 executeCommand(commands[j], scene, context, passState);
             }
 
-<<<<<<< HEAD
-            if (!scene.frameState.invertClassification || picking) {
-                // Common/fastest path. Draw 3D Tiles and classification normally.
-
-                // Draw 3D Tiles
-                us.updatePass(Pass.CESIUM_3D_TILE);
-                commands = frustumCommands.commands[Pass.CESIUM_3D_TILE];
-                length = frustumCommands.indices[Pass.CESIUM_3D_TILE];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState);
-                }
-
-                if (length > 0 && context.stencilBuffer) {
-                    scene._stencilClearCommand.execute(context, passState);
-                }
-
-                // Draw classifications. Modifies 3D Tiles and terrain color.
-                us.updatePass(Pass.GROUND);
-                commands = frustumCommands.commands[Pass.GROUND];
-                length = frustumCommands.indices[Pass.GROUND];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState);
-                }
-            } else if (scene.frameState.invertClassificationColor.alpha < 1.0) {
-                // Inverted classification. Apply alpha to unclassified geometry and classified geometry opaque.
-
-                // Depth only pass
-                us.updatePass(Pass.CESIUM_3D_TILE);
-                commands = frustumCommands.commands[Pass.CESIUM_3D_TILE];
-                length = frustumCommands.indices[Pass.CESIUM_3D_TILE];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState, undefined, true);
-                }
-
-                // Set stencil
-                us.updatePass(Pass.GROUND_IGNORE_SHOW);
-                commands = frustumCommands.commands[Pass.GROUND_IGNORE_SHOW];
-                length = frustumCommands.indices[Pass.GROUND_IGNORE_SHOW];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState);
-                }
-
-                // Draw opaque 3D Tiles where classified
-                us.updatePass(Pass.CESIUM_3D_TILE);
-                commands = frustumCommands.commands[Pass.CESIUM_3D_TILE];
-                length = frustumCommands.indices[Pass.CESIUM_3D_TILE];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState, undefined, false, true);
-                }
-
-                scene._stencilClearCommand.execute(context, passState);
-
-                // Draw style over opaque classification.
-                // Clears stencil.
-                us.updatePass(Pass.GROUND);
-                commands = frustumCommands.commands[Pass.GROUND];
-                length = frustumCommands.indices[Pass.GROUND];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState);
-                }
-
-                // Reset stencil
-                us.updatePass(Pass.GROUND_IGNORE_SHOW);
-                commands = frustumCommands.commands[Pass.GROUND_IGNORE_SHOW];
-                length = frustumCommands.indices[Pass.GROUND_IGNORE_SHOW];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState);
-                }
-            } else {
-                us.updatePass(Pass.CESIUM_3D_TILE);
-                commands = frustumCommands.commands[Pass.CESIUM_3D_TILE];
-                length = frustumCommands.indices[Pass.CESIUM_3D_TILE];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState);
-                }
-
-                scene._stencilClearCommand.execute(context, passState);
-
-                us.updatePass(Pass.GROUND_IGNORE_SHOW);
-                commands = frustumCommands.commands[Pass.GROUND_IGNORE_SHOW];
-                length = frustumCommands.indices[Pass.GROUND_IGNORE_SHOW];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState);
-                }
-
-                us.updatePass(Pass.CESIUM_3D_TILE);
-                commands = frustumCommands.commands[Pass.CESIUM_3D_TILE];
-                length = frustumCommands.indices[Pass.CESIUM_3D_TILE];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState, undefined, false, false, true);
-                }
-
-                scene._stencilClearCommand.execute(context, passState);
-
-                us.updatePass(Pass.GROUND);
-                commands = frustumCommands.commands[Pass.GROUND];
-                length = frustumCommands.indices[Pass.GROUND];
-                for (j = 0; j < length; ++j) {
-                    executeCommand(commands[j], scene, context, passState);
-                }
-            }
-
-=======
->>>>>>> b1b8894641ecd450723e727803ae24d551c93528
             if (defined(globeDepth) && environmentState.useGlobeDepthFramebuffer && (scene.copyGlobeDepth || scene.debugShowGlobeDepth)) {
                 globeDepth.update(context, passState);
                 globeDepth.executeCopyDepth(context, passState);
@@ -2084,13 +1980,6 @@ define([
                 passState.framebuffer = fb;
             }
 
-<<<<<<< HEAD
-            if (clearGlobeDepth) {
-                clearDepth.execute(context, passState);
-                if (useDepthPlane) {
-                    depthPlane.execute(context, passState);
-                }
-=======
             us.updatePass(Pass.TERRAIN_CLASSIFICATION);
             commands = frustumCommands.commands[Pass.TERRAIN_CLASSIFICATION];
             length = frustumCommands.indices[Pass.TERRAIN_CLASSIFICATION];
@@ -2122,7 +2011,6 @@ define([
 
             if (clearGlobeDepth && useDepthPlane) {
                 depthPlane.execute(context, passState);
->>>>>>> b1b8894641ecd450723e727803ae24d551c93528
             }
 
             // Execute commands in order by pass up to the translucent pass.
