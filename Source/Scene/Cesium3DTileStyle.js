@@ -1,4 +1,4 @@
-define([
+define([                                 
         '../Core/clone',
         '../Core/defaultValue',
         '../Core/defined',

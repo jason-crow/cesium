@@ -4,6 +4,8 @@ if (typeof self === 'undefined') {
 
 self.onmessage = function(event) {
     var data = event.data;
+    
+    this.NODE_ENV = event.data.NODE_ENV;
 
     require(data.loaderConfig, [data.workerModule], function(workerModule) {
         //replace onmessage with the required-in workerModule
@@ -316,8 +318,7 @@ var requirejs, require, define;
                     normalizedBaseParts = baseParts.slice(0, baseParts.length - 1);
                     name = normalizedBaseParts.concat(name);
                 }
-
-                //trimDots(name);
+                if(self.NODE_ENV !== 'DEV') trimDots(name);
                 name = name.join('/');
             }
 

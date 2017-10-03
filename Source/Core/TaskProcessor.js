@@ -131,6 +131,7 @@ define([
         worker.postMessage = defaultValue(worker.webkitPostMessage, worker.postMessage);
 
         var bootstrapMessage = {
+            NODE_ENV: process.env.NODE_ENV,
             loaderConfig : {},
             workerModule : TaskProcessor._workerModulePrefix + processor._workerName
         };
