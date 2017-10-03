@@ -67,13 +67,14 @@ function startup(Cesium) {
     'use strict';
 //Sandcastle_Begin
 var viewer = new Cesium.Viewer('cesiumContainer');
+viewer.scene.debugShowFramesPerSecond = true;
 
 viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
     url : 'https://beta.cesium.com/api/assets/1458?access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxYmJiNTAxOC1lOTg5LTQzN2EtODg1OC0zMWJjM2IxNGNlYmMiLCJpZCI6NDQsImFzc2V0cyI6WzE0NThdLCJpYXQiOjE0OTkyNjM4MjB9.1WKijRa-ILkmG6utrhDWX6rDgasjD7dZv-G5ZyCmkKg'
 }));
 
 var classification = viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
-    url : 'http://localhost:8002/tilesets/meshTest/'
+    url : 'http://localhost:8002/tilesets/geometryTest/'
 }));
 
 classification.readyPromise.then(function(tileset) {
@@ -149,22 +150,22 @@ Cesium.knockout.getObservable(viewModel, 'inverted').subscribe(
 );
 Cesium.knockout.getObservable(viewModel, 'invertedRed').subscribe(
     function(newValue) {
-        viewer.scene.invertClassificationColor.red = newValue;
+        viewer.scene.invertClassificationColor.red = parseFloat(newValue);
     }
 );
 Cesium.knockout.getObservable(viewModel, 'invertedGreen').subscribe(
     function(newValue) {
-        viewer.scene.invertClassificationColor.green = newValue;
+        viewer.scene.invertClassificationColor.green = parseFloat(newValue);
     }
 );
 Cesium.knockout.getObservable(viewModel, 'invertedBlue').subscribe(
     function(newValue) {
-        viewer.scene.invertClassificationColor.blue = newValue;
+        viewer.scene.invertClassificationColor.blue = parseFloat(newValue);
     }
 );
 Cesium.knockout.getObservable(viewModel, 'invertedAlpha').subscribe(
     function(newValue) {
-        viewer.scene.invertClassificationColor.alpha = newValue;
+        viewer.scene.invertClassificationColor.alpha = parseFloat(newValue);
     }
 );
 //Sandcastle_End

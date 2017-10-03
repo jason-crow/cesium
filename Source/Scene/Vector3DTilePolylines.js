@@ -6,6 +6,7 @@ define([
         '../Core/ComponentDatatype',
         '../Core/defaultValue',
         '../Core/defined',
+        '../Core/defineProperties',
         '../Core/destroyObject',
         '../Core/Ellipsoid',
         '../Core/IndexDatatype',
@@ -31,6 +32,7 @@ define([
         ComponentDatatype,
         defaultValue,
         defined,
+        defineProperties,
         destroyObject,
         Ellipsoid,
         IndexDatatype,
@@ -98,7 +100,40 @@ define([
 
         this._constantColor = Color.clone(Color.WHITE);
         this._highlightColor = this._constantColor;
+
+        this._trianglesLength = 0;
+        this._geometryByteLength = 0;
     }
+
+    defineProperties(Vector3DTilePolylines.prototype, {
+        /**
+         * Gets the number of triangles.
+         *
+         * @memberof Vector3DTilePolylines.prototype
+         *
+         * @type {Number}
+         * @readonly
+         */
+        trianglesLength : {
+            get : function() {
+                return this._trianglesLength;
+            }
+        },
+
+        /**
+         * Gets the geometry memory in bytes.
+         *
+         * @memberof Vector3DTilePolylines.prototype
+         *
+         * @type {Number}
+         * @readonly
+         */
+        geometryByteLength : {
+            get : function() {
+                return this._geometryByteLength;
+            }
+        }
+    });
 
     var attributeLocations = {
         previousPosition : 0,
@@ -250,6 +285,11 @@ define([
 
             index += 4;
         }
+
+        var byteLength = prevPositions.byteLength + curPositions.byteLength + nextPositions.byteLength;
+        byteLength += expandAndWidth.byteLength + batchIds.byteLength + indices.byteLength;
+        primitive._trianglesLength = indices.length / 3;
+        primitive._geometryByteLength = byteLength;
 
         var prevPositionBuffer = Buffer.createVertexBuffer({
             context : context,
@@ -431,7 +471,6 @@ define([
                 shaderProgram : primitive._sp,
                 uniformMap : uniformMap,
                 boundingVolume : primitive._boundingVolume,
-                //pass : Pass.GROUND
                 pass : Pass.TRANSLUCENT
             });
         }
@@ -449,7 +488,6 @@ define([
                 shaderProgram : primitive._spPick,
                 uniformMap : uniformMap,
                 boundingVolume : primitive._boundingVolume,
-                //pass : Pass.GROUND
                 pass : Pass.TRANSLUCENT
             });
         }
@@ -467,7 +505,7 @@ define([
         var batchIds = this._batchIds;
         var length = batchIds.length;
         for (var i = 0; i < length; ++i) {
-            var batchId = batchIds;
+            var batchId = batchIds[i];
             features[batchId] = new Cesium3DTileFeature(content, batchId);
         }
     };
@@ -496,6 +534,9 @@ define([
 
     var scratchColor = new Color();
 
+    var DEFAULT_COLOR_VALUE = Color.WHITE;
+    var DEFAULT_SHOW_VALUE = true;
+
     /**
      * Apply a style to the content.
      *
@@ -515,8 +556,8 @@ define([
             var batchId = batchIds[i];
             var feature = features[batchId];
 
-            feature.color = style.color.evaluateColor(frameState, feature, scratchColor);
-            feature.show = style.show.evaluate(frameState, feature);
+            feature.color = defined(style.color) ? style.color.evaluateColor(frameState, feature, scratchColor) : DEFAULT_COLOR_VALUE;
+            feature.show = defined(style.show) ? style.show.evaluate(frameState, feature) : DEFAULT_SHOW_VALUE;
         }
     };
 

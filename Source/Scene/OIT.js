@@ -441,20 +441,20 @@ define([
             // shader compilation errors.
 
             fs.sources.splice(0, 0,
-                    (source.indexOf('gl_FragData') !== -1 ? '#extension GL_EXT_draw_buffers : enable \n' : '') +
-                    'vec4 czm_gl_FragColor;\n' +
-                    'bool czm_discard = false;\n');
+                (source.indexOf('gl_FragData') !== -1 ? '#extension GL_EXT_draw_buffers : enable \n' : '') +
+                'vec4 czm_gl_FragColor;\n' +
+                'bool czm_discard = false;\n');
 
             fs.sources.push(
-                    'void main()\n' +
-                    '{\n' +
-                    '    czm_translucent_main();\n' +
-                    '    if (czm_discard)\n' +
-                    '    {\n' +
-                    '        discard;\n' +
-                    '    }\n' +
-                    source +
-                    '}\n');
+                'void main()\n' +
+                '{\n' +
+                '    czm_translucent_main();\n' +
+                '    if (czm_discard)\n' +
+                '    {\n' +
+                '        discard;\n' +
+                '    }\n' +
+                source +
+                '}\n');
 
             shader = context.shaderCache.createDerivedShaderProgram(shaderProgram, keyword, {
                 vertexShaderSource : shaderProgram.vertexShaderSource,
@@ -533,10 +533,9 @@ define([
         return result;
     };
 
-    function executeTranslucentCommandsSortedMultipass(oit, scene, executeFunction, passState, commands, invertedClassification) {
+    function executeTranslucentCommandsSortedMultipass(oit, scene, executeFunction, passState, commands, invertClassification) {
         var command;
         var derivedCommand;
-        var inverted;
         var j;
 
         var context = scene.context;
@@ -555,17 +554,13 @@ define([
 
         for (j = 0; j < length; ++j) {
             command = commands[j];
-            if (invertedClassification) {
-                inverted = command.derivedCommands.inverted;
-                if (!defined(inverted)) {
-                    continue;
-                }
-                derivedCommand = inverted.oit.translucentCommand;
-            } else if (shadowsEnabled && command.receiveShadows) {
-                derivedCommand = command.derivedCommands.oit.shadows.translucentCommand;
-            } else {
-                derivedCommand = command.derivedCommands.oit.translucentCommand;
-            }
+            derivedCommand = (shadowsEnabled && command.receiveShadows) ? command.derivedCommands.oit.shadows.translucentCommand : command.derivedCommands.oit.translucentCommand;
+            executeFunction(derivedCommand, scene, context, passState, debugFramebuffer);
+        }
+
+        if (defined(invertClassification)) {
+            command = invertClassification.unclassifiedCommand;
+            derivedCommand = (shadowsEnabled && command.receiveShadows) ? command.derivedCommands.oit.shadows.translucentCommand : command.derivedCommands.oit.translucentCommand;
             executeFunction(derivedCommand, scene, context, passState, debugFramebuffer);
         }
 
@@ -573,24 +568,20 @@ define([
 
         for (j = 0; j < length; ++j) {
             command = commands[j];
-            if (invertedClassification) {
-                inverted = command.derivedCommands.inverted;
-                if (!defined(inverted)) {
-                    continue;
-                }
-                derivedCommand = inverted.oit.alphaCommand;
-            } else if (shadowsEnabled && command.receiveShadows) {
-                derivedCommand = command.derivedCommands.oit.shadows.alphaCommand;
-            } else {
-                derivedCommand = command.derivedCommands.oit.alphaCommand;
-            }
+            derivedCommand = (shadowsEnabled && command.receiveShadows) ? command.derivedCommands.oit.shadows.alphaCommand : command.derivedCommands.oit.alphaCommand;
+            executeFunction(derivedCommand, scene, context, passState, debugFramebuffer);
+        }
+
+        if (defined(invertClassification)) {
+            command = invertClassification.unclassifiedCommand;
+            derivedCommand = (shadowsEnabled && command.receiveShadows) ? command.derivedCommands.oit.shadows.alphaCommand : command.derivedCommands.oit.alphaCommand;
             executeFunction(derivedCommand, scene, context, passState, debugFramebuffer);
         }
 
         passState.framebuffer = framebuffer;
     }
 
-    function executeTranslucentCommandsSortedMRT(oit, scene, executeFunction, passState, commands, invertedClassification) {
+    function executeTranslucentCommandsSortedMRT(oit, scene, executeFunction, passState, commands, invertClassification) {
         var context = scene.context;
         var framebuffer = passState.framebuffer;
         var length = commands.length;
@@ -603,33 +594,31 @@ define([
         var debugFramebuffer = oit._opaqueFBO;
         passState.framebuffer = oit._translucentFBO;
 
+        var command;
+        var derivedCommand;
+
         for (var j = 0; j < length; ++j) {
-            var command = commands[j];
-            var derivedCommand;
-            if (invertedClassification) {
-                var inverted = command.derivedCommands.inverted;
-                if (!defined(inverted)) {
-                    continue;
-                }
-                derivedCommand = inverted.oit.translucentCommand;
-            } else if (shadowsEnabled && command.receiveShadows) {
-                derivedCommand = command.derivedCommands.oit.shadows.translucentCommand;
-            } else {
-                derivedCommand = command.derivedCommands.oit.translucentCommand;
-            }
+            command = commands[j];
+            derivedCommand = (shadowsEnabled && command.receiveShadows) ? command.derivedCommands.oit.shadows.translucentCommand : command.derivedCommands.oit.translucentCommand;
+            executeFunction(derivedCommand, scene, context, passState, debugFramebuffer);
+        }
+
+        if (defined(invertClassification)) {
+            command = invertClassification.unclassifiedCommand;
+            derivedCommand = (shadowsEnabled && command.receiveShadows) ? command.derivedCommands.oit.shadows.translucentCommand : command.derivedCommands.oit.translucentCommand;
             executeFunction(derivedCommand, scene, context, passState, debugFramebuffer);
         }
 
         passState.framebuffer = framebuffer;
     }
 
-    OIT.prototype.executeCommands = function(scene, executeFunction, passState, commands, invertedClassification) {
+    OIT.prototype.executeCommands = function(scene, executeFunction, passState, commands, invertClassification) {
         if (this._translucentMRTSupport) {
-            executeTranslucentCommandsSortedMRT(this, scene, executeFunction, passState, commands, invertedClassification);
+            executeTranslucentCommandsSortedMRT(this, scene, executeFunction, passState, commands, invertClassification);
             return;
         }
 
-        executeTranslucentCommandsSortedMultipass(this, scene, executeFunction, passState, commands, invertedClassification);
+        executeTranslucentCommandsSortedMultipass(this, scene, executeFunction, passState, commands, invertClassification);
     };
 
     OIT.prototype.execute = function(context, passState) {
