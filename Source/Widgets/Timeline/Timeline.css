@@ -1,17 +1,18 @@
 .cesium-timeline-main {
-	position: relative;
-	left: 0;
+	position: absolute;
+    width: 100%;
+    left: 0;
 	bottom: 0;
-	overflow: hidden;
-	border: solid 1px #888;
+	height:50px;
+    border: 1px solid #888;
 }
 
 .cesium-timeline-trackContainer {
 	width: 100%;
 	overflow: auto;
 	border-top: solid 1px #888;
-	position: relative;
-	top: 0;
+	position: absolute;
+	bottom: 0;
 	left: 0;
 }
 
@@ -21,20 +22,31 @@
 	left: 0;
 	width: 100%;
 }
-
 .cesium-timeline-needle {
 	position: absolute;
 	left: 0;
-	top: 1.7em;
 	bottom: 0;
+	height:100%;
 	width: 1px;
-	background: #F00;
+	background: yellow;
+	z-index:9999;
 }
-
+.cesium-timeline-needle:after {
+	content:'';
+	background:url("../Images/TimelineIcons.png");
+	background-repeat: no-repeat;
+	position: absolute;
+	width: 16px;
+	height: 16px;
+	transform: translateX(-50%);
+	top:-16px;
+}
 .cesium-timeline-bar {
-    position: relative;
+	position: absolute;
+	z-index: 800;
     left: 0;
-    top: 0;
+	bottom: 0;
+	height:50px !important;
     overflow: hidden;
     cursor: pointer;
     width: 100%;
@@ -61,7 +73,8 @@
     position: absolute;
     top: 0;
     left: 0;
-    white-space: nowrap;
+	white-space: nowrap;
+	pointer-events:none;
     font-size: 80%;
     color: #eee;
 }
@@ -94,10 +107,11 @@
 }
 
 .cesium-timeline-icon16 {
-	display: block;
+	display: none;
 	position: absolute;
 	width: 16px;
 	height: 16px;
+	z-index:9999;
 	background-image: url("../Images/TimelineIcons.png");
 	background-repeat: no-repeat;
 }

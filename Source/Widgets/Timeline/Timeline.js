@@ -165,6 +165,16 @@ define([
 
         clock.onTick.addEventListener(this.updateFromClock, this);
         this.updateFromClock();
+
+        this._deactivateRevisions = new Cesium.Event();
+        this._deactivateRevisions.addEventListener(() => 
+            {
+            this._highlightRanges.filter((range) => range._isRevision).forEach(function(range) 
+                {
+                range.active = false;
+                if(Cesium.defined(range._previewMarker)) range._previewMarker.active = false;
+                }.bind(this));    
+            });
     }
 
     /**
@@ -215,6 +225,17 @@ define([
      */
     Timeline.prototype.addHighlightRange = function(color, heightInPx, base) {
         var newHighlightRange = new TimelineHighlightRange(color, heightInPx, base);
+        this._highlightRanges.push(newHighlightRange);
+        this.resize();
+        return newHighlightRange;
+    };
+
+    /**
+     * @private
+     */
+    Timeline.prototype.addRevision = function(revision, cssClass, onChange) {
+        var newHighlightRange = new TimelineHighlightRange('#08F', 30, 20, cssClass);
+        newHighlightRange.makeRevision(revision, onChange);
         this._highlightRanges.push(newHighlightRange);
         this.resize();
         return newHighlightRange;
@@ -428,11 +449,10 @@ define([
             epochJulian : epochJulian,
             duration : duration,
             timeBarWidth : timeBarWidth,
-            getAlpha : getAlpha
+            getAlpha : getAlpha,
+            topDiv : this._topDiv,
+            deactivateRevisions: this._deactivateRevisions
         };
-        this._highlightRanges.forEach(function(highlightRange) {
-            tics += highlightRange.render(renderState);
-        });
 
         // Calculate tic mark label spacing in the TimeBar.
         var mainTic = 0.0, subTic = 0.0, tinyTic = 0.0;
@@ -541,7 +561,9 @@ define([
         tics += '<span class="cesium-timeline-icon16" style="left:' + scrubX + 'px;bottom:0;background-position: 0 0;"></span>';
         timeBar.innerHTML = tics;
         this._scrubElement = timeBar.lastChild;
-
+        this._highlightRanges.forEach(function(highlightRange) {
+            timeBar.insertBefore(highlightRange.render(renderState),timeBar.firstChild);
+        });
         // Clear track canvas.
         this._context.clearRect(0, 0, this._trackListEle.width, this._trackListEle.height);
 
@@ -575,6 +597,36 @@ define([
         }
     };
 
+    Timeline.prototype.clearRevisions = function()
+        {
+        this._highlightRanges.forEach((range) => range.clearRevision());
+        this._highlightRanges = [];
+        }
+
+    Timeline.prototype.updateRevisions = function(time) {
+        var revisionRanges = this._highlightRanges.filter((range) => range._isRevision);
+
+        if(revisionRanges.length === 0) return;
+
+        time = Cesium.defaultValue(time,this._clock.currentTime);
+
+         var hasChanged = false;
+        var revisions = [];
+        revisionRanges.forEach((range) =>
+            {
+            var isActive = time > range._start;         
+            if(range._active !== isActive) 
+                {
+                range._active = isActive;
+                hasChanged = true;
+                }                        
+            });
+        if(hasChanged)
+            {
+            var revisions = revisionRanges.filter((r) => r._active).map((r) => r._revision);
+            revisionRanges[0]._change.raiseEvent(revisions, true);
+            }
+    };
     /**
      * @private
      */
@@ -594,6 +646,8 @@ define([
         evt.timeJulian = this._scrubJulian;
         evt.clock = this._clock;
         this._topDiv.dispatchEvent(evt);
+
+        this.updateRevisions(this._scrubJulian);
     };
 
     function createMouseDownCallback(timeline) {
