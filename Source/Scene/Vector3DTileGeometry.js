@@ -1,34 +1,26 @@
 define([
-        '../Core/BoxGeometry',
+        '../Core/BoundingSphere',
         '../Core/Cartesian3',
         '../Core/Color',
-        '../Core/CylinderGeometry',
         '../Core/defaultValue',
         '../Core/defined',
         '../Core/defineProperties',
         '../Core/destroyObject',
-        '../Core/EllipsoidGeometry',
-        '../Core/Math',
         '../Core/Matrix4',
         '../Core/TaskProcessor',
-        '../Core/VertexFormat',
         '../ThirdParty/when',
         './Vector3DTileBatch',
         './Vector3DTilePrimitive'
     ], function(
-        BoxGeometry,
+        BoundingSphere,
         Cartesian3,
         Color,
-        CylinderGeometry,
         defaultValue,
         defined,
         defineProperties,
         destroyObject,
-        EllipsoidGeometry,
-        CesiumMath,
         Matrix4,
         TaskProcessor,
-        VertexFormat,
         when,
         Vector3DTileBatch,
         Vector3DTilePrimitive) {
@@ -49,6 +41,21 @@ define([
         this._batchTable = options.batchTable;
         this._boundingVolume = options.boundingVolume;
 
+        this._boundingVolumes = undefined;
+        this._batchedIndices = undefined;
+
+        this._indices = undefined;
+        this._indexOffsets = undefined;
+        this._indexCounts = undefined;
+
+        this._positions = undefined;
+        this._vertexBatchIds = undefined;
+
+        this._batchIds = undefined;
+
+        this._batchTableColors = undefined;
+        this._packedBuffer = undefined;
+
         this._ready = false;
         this._readyPromise = when.defer();
 
@@ -62,6 +69,13 @@ define([
          * @default false
          */
         this.debugWireframe = false;
+
+        /**
+         * Forces a re-batch instead of waiting after a number of frames have been rendered.
+         * @type {Boolean}
+         * @default false
+         */
+        this.forceRebatch = false;
     }
 
     defineProperties(Vector3DTileGeometry.prototype, {
@@ -131,6 +145,15 @@ define([
     function unpackBuffer(geometries, packedBuffer) {
         var offset = 0;
 
+        var indicesBytesPerElement = packedBuffer[offset++];
+        var numBVS = packedBuffer[offset++];
+        var bvs = geometries._boundingVolumes = new Array(numBVS);
+
+        for (var i = 0; i < numBVS; ++i) {
+            bvs[i] = BoundingSphere.unpack(packedBuffer, offset);
+            offset += BoundingSphere.packedLength;
+        }
+
         var numBatchedIndices = packedBuffer[offset++];
         var bis = geometries._batchedIndices = new Array(numBatchedIndices);
 
@@ -155,6 +178,8 @@ define([
                 batchIds : batchIds
             });
         }
+
+        return indicesBytesPerElement;
     }
 
     var createVerticesTaskProcessor = new TaskProcessor('createVectorTileGeometries');
@@ -164,6 +189,7 @@ define([
         if (defined(geometries._primitive)) {
             return;
         }
+
         if (!defined(geometries._verticesPromise)) {
             var boxes = geometries._boxes;
             var boxBatchIds = geometries._boxBatchIds;
@@ -179,18 +205,29 @@ define([
 
             if (!defined(batchTableColors)) {
                 // Copy because they may be the views on the same buffer.
-                boxes = geometries._boxes = boxes.slice();
-                boxBatchIds = geometries._boxBatchIds = boxBatchIds.slice();
-                cylinders = geometries._cylinders = cylinders.slice();
-                cylinderBatchIds = geometries._cylinderBatchIds = cylinderBatchIds.slice();
-                ellipsoids = geometries._ellipsoids = ellipsoids.slice();
-                ellipsoidBatchIds = geometries._ellipsoidBatchIds = ellipsoidBatchIds.slice();
-                spheres = geometries._sphere = spheres.slice();
-                sphereBatchIds = geometries._sphereBatchIds = sphereBatchIds.slice();
+                var length = 0;
+                if (defined(geometries._boxes)) {
+                    boxes = geometries._boxes = boxes.slice();
+                    boxBatchIds = geometries._boxBatchIds = boxBatchIds.slice();
+                    length += boxBatchIds.length;
+                }
+                if (defined(geometries._cylinders)) {
+                    cylinders = geometries._cylinders = cylinders.slice();
+                    cylinderBatchIds = geometries._cylinderBatchIds = cylinderBatchIds.slice();
+                    length += cylinderBatchIds.length;
+                }
+                if (defined(geometries._ellipsoids)) {
+                    ellipsoids = geometries._ellipsoids = ellipsoids.slice();
+                    ellipsoidBatchIds = geometries._ellipsoidBatchIds = ellipsoidBatchIds.slice();
+                    length += ellipsoidBatchIds.length;
+                }
+                if (defined(geometries._spheres)) {
+                    spheres = geometries._sphere = spheres.slice();
+                    sphereBatchIds = geometries._sphereBatchIds = sphereBatchIds.slice();
+                    length += sphereBatchIds.length;
+                }
 
-                var length = boxBatchIds.length + cylinderBatchIds.length + ellipsoidBatchIds.length + sphereBatchIds.length;
                 batchTableColors = geometries._batchTableColors = new Uint32Array(length);
-
                 var batchTable = geometries._batchTable;
 
                 for (var i = 0; i < length; ++i) {
@@ -202,21 +239,29 @@ define([
             }
 
             var transferrableObjects = [];
-            transferrableObjects.push(boxes.buffer, boxBatchIds.buffer);
-            transferrableObjects.push(cylinders.buffer, cylinderBatchIds.buffer);
-            transferrableObjects.push(ellipsoids.buffer, ellipsoidBatchIds.buffer);
-            transferrableObjects.push(spheres.buffer, sphereBatchIds.buffer);
+            if (defined(boxes)) {
+                transferrableObjects.push(boxes.buffer, boxBatchIds.buffer);
+            }
+            if (defined(cylinders)) {
+                transferrableObjects.push(cylinders.buffer, cylinderBatchIds.buffer);
+            }
+            if (defined(ellipsoids)) {
+                transferrableObjects.push(ellipsoids.buffer, ellipsoidBatchIds.buffer);
+            }
+            if (defined(spheres)) {
+                transferrableObjects.push(spheres.buffer, sphereBatchIds.buffer);
+            }
             transferrableObjects.push(batchTableColors.buffer, packedBuffer.buffer);
 
             var parameters = {
-                boxes : boxes.buffer,
-                boxBatchIds : boxBatchIds.buffer,
-                cylinders : cylinders.buffer,
-                cylinderBatchIds : cylinderBatchIds.buffer,
-                ellipsoids : ellipsoids.buffer,
-                ellipsoidBatchIds : ellipsoidBatchIds.buffer,
-                spheres : spheres.buffer,
-                sphereBatchIds : sphereBatchIds.buffer,
+                boxes : defined(boxes) ? boxes.buffer : undefined,
+                boxBatchIds : defined(boxes) ? boxBatchIds.buffer : undefined,
+                cylinders : defined(cylinders) ? cylinders.buffer : undefined,
+                cylinderBatchIds : defined(cylinders) ? cylinderBatchIds.buffer : undefined,
+                ellipsoids : defined(ellipsoids) ? ellipsoids.buffer : undefined,
+                ellipsoidBatchIds : defined(ellipsoids) ? ellipsoidBatchIds.buffer : undefined,
+                spheres : defined(spheres) ? spheres.buffer : undefined,
+                sphereBatchIds : defined(spheres) ? sphereBatchIds.buffer : undefined,
                 batchTableColors : batchTableColors.buffer,
                 packedBuffer : packedBuffer.buffer
             };
@@ -229,14 +274,19 @@ define([
 
             when(verticesPromise, function(result) {
                 var packedBuffer = new Float64Array(result.packedBuffer);
-                unpackBuffer(geometries, packedBuffer);
+                var indicesBytesPerElement = unpackBuffer(geometries, packedBuffer);
 
-                geometries._indices = new Uint32Array(result.indices);
+                if (indicesBytesPerElement === 2) {
+                    geometries._indices = new Uint16Array(result.indices);
+                } else {
+                    geometries._indices = new Uint32Array(result.indices);
+                }
+
                 geometries._indexOffsets = new Uint32Array(result.indexOffsets);
                 geometries._indexCounts = new Uint32Array(result.indexCounts);
 
                 geometries._positions = new Float32Array(result.positions);
-                geometries._vertexBatchIds = new Uint32Array(result.vertexBatchIds);
+                geometries._vertexBatchIds = new Uint16Array(result.vertexBatchIds);
 
                 geometries._batchIds = new Uint16Array(result.batchIds);
 
@@ -255,7 +305,7 @@ define([
                 indexCounts : geometries._indexCounts,
                 batchedIndices : geometries._batchedIndices,
                 boundingVolume : geometries._boundingVolume,
-                boundingVolumes : [], // TODO
+                boundingVolumes : geometries._boundingVolumes,
                 center : geometries._center,
                 pickObject : defaultValue(geometries._pickObject, geometries)
             });
@@ -272,6 +322,23 @@ define([
             geometries._modelMatrix = undefined;
             geometries._batchTable = undefined;
             geometries._boundingVolume = undefined;
+
+            geometries._boundingVolumes = undefined;
+            geometries._batchedIndices = undefined;
+
+            geometries._indices = undefined;
+            geometries._indexOffsets = undefined;
+            geometries._indexCounts = undefined;
+
+            geometries._positions = undefined;
+            geometries._vertexBatchIds = undefined;
+
+            geometries._batchIds = undefined;
+
+            geometries._batchTableColors = undefined;
+            geometries._packedBuffer = undefined;
+
+            geometries._verticesPromise = undefined;
 
             geometries._readyPromise.resolve();
         }
@@ -332,6 +399,7 @@ define([
         }
 
         this._primitive.debugWireframe = this.debugWireframe;
+        this._primitive.forceRebatch = this.forceRebatch;
         this._primitive.update(frameState);
     };
 

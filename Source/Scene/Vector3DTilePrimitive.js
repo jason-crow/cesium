@@ -22,6 +22,7 @@ define([
         './BlendingState',
         './Cesium3DTileFeature',
         './DepthFunction',
+        './Expression',
         './StencilFunction',
         './StencilOperation',
         './Vector3DTileBatch'
@@ -49,6 +50,7 @@ define([
         BlendingState,
         Cesium3DTileFeature,
         DepthFunction,
+        Expression,
         StencilFunction,
         StencilOperation,
         Vector3DTileBatch) {
@@ -127,6 +129,8 @@ define([
         this._pickCommandsDirty = true;
         this._framesSinceLastRebatch = 0;
 
+        this._updatingAllCommands = false;
+
         this._trianglesLength = this._indices.length / 3;
         this._geometryByteLength = this._indices.byteLength + this._positions.byteLength + this._vertexBatchIds.byteLength;
 
@@ -137,6 +141,13 @@ define([
          */
         this.debugWireframe = false;
         this._debugWireframe = this.debugWireframe;
+
+        /**
+         * Forces a re-batch instead of waiting after a number of frames have been rendered.
+         * @type {Boolean}
+         * @default false
+         */
+        this.forceRebatch = false;
     }
 
     defineProperties(Vector3DTilePrimitive.prototype, {
@@ -581,7 +592,7 @@ define([
             return false;
         }
 
-        if (needToRebatch && primitive._framesSinceLastRebatch < 120) {
+        if (needToRebatch && !primitive.forceRebatch && primitive._framesSinceLastRebatch < 120) {
             ++primitive._framesSinceLastRebatch;
             return;
         }
@@ -616,6 +627,7 @@ define([
         var modelMatrix = Matrix4.IDENTITY;
         var uniformMap = primitive._batchTable.getUniformMapCallback()(primitive._uniformMap);
         var bv = primitive._boundingVolume;
+        var pass = Pass.CESIUM_3D_TILE_CLASSIFICATION;
 
         var owner = primitive._pickObject;
         if (!defined(owner)) {
@@ -641,7 +653,7 @@ define([
             stencilPreloadCommand.shaderProgram = sp;
             stencilPreloadCommand.uniformMap = uniformMap;
             stencilPreloadCommand.boundingVolume = bv;
-            stencilPreloadCommand.pass = Pass.CESIUM_3D_TILE_CLASSIFICATION;
+            stencilPreloadCommand.pass = pass;
 
             var stencilDepthCommand = commands[j * 3 + 1];
             if (!defined(stencilDepthCommand)) {
@@ -658,7 +670,7 @@ define([
             stencilDepthCommand.shaderProgram = sp;
             stencilDepthCommand.uniformMap = uniformMap;
             stencilDepthCommand.boundingVolume = bv;
-            stencilDepthCommand.pass = Pass.CESIUM_3D_TILE_CLASSIFICATION;
+            stencilDepthCommand.pass = pass;
 
             var colorCommand = commands[j * 3 + 2];
             if (!defined(colorCommand)) {
@@ -675,7 +687,7 @@ define([
             colorCommand.shaderProgram = sp;
             colorCommand.uniformMap = uniformMap;
             colorCommand.boundingVolume = bv;
-            colorCommand.pass = Pass.CESIUM_3D_TILE_CLASSIFICATION;
+            colorCommand.pass = pass;
         }
 
         primitive._commandsDirty = true;
@@ -723,6 +735,7 @@ define([
         var spPick = primitive._spPick;
         var modelMatrix = Matrix4.IDENTITY;
         var uniformMap = primitive._batchTable.getPickUniformMapCallback()(primitive._uniformMap);
+        var pass = Pass.CESIUM_3D_TILE_CLASSIFICATION;
 
         var owner = primitive._pickObject;
         if (!defined(owner)) {
@@ -749,7 +762,7 @@ define([
             stencilPreloadCommand.shaderProgram = spStencil;
             stencilPreloadCommand.uniformMap = uniformMap;
             stencilPreloadCommand.boundingVolume = bv;
-            stencilPreloadCommand.pass = Pass.CESIUM_3D_TILE_CLASSIFICATION;
+            stencilPreloadCommand.pass = pass;
 
             var stencilDepthCommand = pickCommands[j * 3 + 1];
             if (!defined(stencilDepthCommand)) {
@@ -766,7 +779,7 @@ define([
             stencilDepthCommand.shaderProgram = spStencil;
             stencilDepthCommand.uniformMap = uniformMap;
             stencilDepthCommand.boundingVolume = bv;
-            stencilDepthCommand.pass = Pass.CESIUM_3D_TILE_CLASSIFICATION;
+            stencilDepthCommand.pass = pass;
 
             var colorCommand = pickCommands[j * 3 + 2];
             if (!defined(colorCommand)) {
@@ -783,7 +796,7 @@ define([
             colorCommand.shaderProgram = spPick;
             colorCommand.uniformMap = uniformMap;
             colorCommand.boundingVolume = bv;
-            colorCommand.pass = Pass.CESIUM_3D_TILE_CLASSIFICATION;
+            colorCommand.pass = pass;
         }
 
         primitive._pickCommandsDirty = false;
@@ -815,21 +828,37 @@ define([
     };
 
     function clearStyle(polygons, features) {
+        polygons._updatingAllCommands = true;
+
         var batchIds = polygons._batchIds;
         var length = batchIds.length;
-        for (var i = 0; i < length; ++i) {
+        var i;
+
+        for (i = 0; i < length; ++i) {
             var batchId = batchIds[i];
             var feature = features[batchId];
 
             feature.show = true;
             feature.color = Color.WHITE;
         }
+
+        var batchedIndices = this._batchedIndices;
+        length = batchedIndices.length;
+
+        for (i = 0; i < length; ++i) {
+            batchedIndices[i].color = Color.clone(Color.WHITE);
+        }
+
+        polygons._updatingAllCommands = false;
+        polygons._batchDirty = true;
     }
 
     var scratchColor = new Color();
 
     var DEFAULT_COLOR_VALUE = Color.WHITE;
     var DEFAULT_SHOW_VALUE = true;
+
+    var complexExpressionReg = /\$/;
 
     /**
      * Apply a style to the content.
@@ -844,14 +873,32 @@ define([
             return;
         }
 
+        var colorExpression = style.color;
+        var isSimpleStyle = colorExpression instanceof Expression && !complexExpressionReg.test(colorExpression.expression);
+        this._updatingAllCommands = isSimpleStyle;
+
         var batchIds = this._batchIds;
         var length = batchIds.length;
-        for (var i = 0; i < length; ++i) {
+        var i;
+
+        for (i = 0; i < length; ++i) {
             var batchId = batchIds[i];
             var feature = features[batchId];
 
             feature.color = defined(style.color) ? style.color.evaluateColor(frameState, feature, scratchColor) : DEFAULT_COLOR_VALUE;
             feature.show = defined(style.show) ? style.show.evaluate(frameState, feature) : DEFAULT_SHOW_VALUE;
+        }
+
+        if (isSimpleStyle) {
+            var batchedIndices = this._batchedIndices;
+            length = batchedIndices.length;
+
+            for (i = 0; i < length; ++i) {
+                batchedIndices[i].color = Color.clone(Color.WHITE);
+            }
+
+            this._updatingAllCommands = false;
+            this._batchDirty = true;
         }
     };
 
@@ -863,6 +910,10 @@ define([
      * @param {Color} color The new polygon color.
      */
     Vector3DTilePrimitive.prototype.updateCommands = function(batchId, color) {
+        if (this._updatingAllCommands) {
+            return;
+        }
+
         var offset = this._indexOffsets[batchId];
         var count = this._indexCounts[batchId];
 
