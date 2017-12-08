@@ -106,7 +106,7 @@ define([
      * @param {Number[]} array The packed array.
      * @param {Number} [startingIndex=0] The starting index of the element to be unpacked.
      * @param {OrientedBoundingBox} [result] The object into which to store the result.
-     * @returns {OrientedBoundingBox} The modified result parameter or a new Cartesian3 instance if one was not provided.
+     * @returns {OrientedBoundingBox} The modified result parameter or a new OrientedBoundingBox instance if one was not provided.
      */
     OrientedBoundingBox.unpack = function(array, startingIndex, result) {
         //>>includeStart('debug', pragmas.debug);
@@ -327,8 +327,8 @@ define([
         if (!defined(rectangle)) {
             throw new DeveloperError('rectangle is required');
         }
-        if (rectangle.width < 0.0 || rectangle.width > CesiumMath.PI) {
-            throw new DeveloperError('Rectangle width must be between 0 and pi');
+        if (rectangle.width < 0.0 || rectangle.width > CesiumMath.TWO_PI) {
+            throw new DeveloperError('Rectangle width must be between 0 and 2*pi');
         }
         if (rectangle.height < 0.0 || rectangle.height > CesiumMath.PI) {
             throw new DeveloperError('Rectangle height must be between 0 and pi');

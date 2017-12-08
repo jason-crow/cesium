@@ -10,6 +10,7 @@ define([
         '../Core/Matrix4',
         '../Core/TaskProcessor',
         '../ThirdParty/when',
+        './ClassificationType',
         './Vector3DTileBatch',
         './Vector3DTilePrimitive'
     ], function(
@@ -24,10 +25,33 @@ define([
         Matrix4,
         TaskProcessor,
         when,
+        ClassificationType,
         Vector3DTileBatch,
         Vector3DTilePrimitive) {
     'use strict';
 
+    /**
+     * Creates a batch of meshes intersecting 3D Tiles and/or terrain.
+     *
+     * @alias Vector3DTileMeshes
+     * @constructor
+     *
+     * @param {Object} options An object with following properties:
+     * @param {ArrayBuffer} options.buffer A buffer containing the indices and positions of the mesh.
+     * @param {Number} options.byteOffset The offset into buffer to extract the indices and positions.
+     * @param {Number} options.positionCount The number of positions of all meshes for extraction from buffer.
+     * @param {Uint32Array} options.indexOffsets The offsets into the indices buffer for each mesh.
+     * @param {Uint32Array} options.indexCounts The number of indices for each mesh.
+     * @param {IndexDatatype} options.indexBytesPerElement The number of bytes per index.
+     * @param {Uint16Array} options.batchIds The batch id for each mesh.
+     * @param {Cartesian3} options.center The RTC center of all meshes.
+     * @param {Matrix4} options.modelMatrix The modelMatrix of all meshes.
+     * @param {Cesium3DTileBatchTable} options.batchTable The batch table.
+     * @param {BoundingSphere} options.boundingVolume The bounding volume for the entire batch of meshes.
+     * @param {Object} options.pickObject The object to place as the owner of the draw commands.
+     *
+     * @private
+     */
     function Vector3DTileMeshes(options) {
         // these will all be released after the primitive is created
         this._buffer = options.buffer;
@@ -67,11 +91,18 @@ define([
         this.debugWireframe = false;
 
         /**
-         * Forces a re-batch instead of waiting after a number of frames have been rendered.
+         * Forces a re-batch instead of waiting after a number of frames have been rendered. For testing only.
          * @type {Boolean}
          * @default false
          */
         this.forceRebatch = false;
+
+        /**
+         * What this tile will classify.
+         * @type {ClassificationType}
+         * @default ClassificationType.CESIUM_3D_TILE
+         */
+        this.classificationType = ClassificationType.CESIUM_3D_TILE;
     }
 
     defineProperties(Vector3DTileMeshes.prototype, {
@@ -370,6 +401,7 @@ define([
 
         this._primitive.debugWireframe = this.debugWireframe;
         this._primitive.forceRebatch = this.forceRebatch;
+        this._primitive.classificationType = this.classificationType;
         this._primitive.update(frameState);
     };
 

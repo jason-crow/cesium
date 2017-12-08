@@ -53,21 +53,21 @@ define([
     'use strict';
 
     /**
-     * Renders a batch of polylines that have been subdivided to be draped on terrain.
+     * Creates a batch of polylines that have been subdivided to be draped on terrain.
      *
      * @alias Vector3DTilePolylines
      * @constructor
      *
      * @param {Object} options An object with following properties:
-     * @param {Float32Array|Uint16Array} options.positions The positions of the polylines
-     * @param {Number[]} options.counts The number or positions in the each polyline.
-     * @param {Number[]} options.widths The width of each polyline.
+     * @param {Uint16Array} options.positions The positions of the polylines
+     * @param {Uint32Array} options.counts The number or positions in the each polyline.
+     * @param {Uint16Array} options.widths The width of each polyline.
      * @param {Number} options.minimumHeight The minimum height of the terrain covered by the tile.
      * @param {Number} options.maximumHeight The maximum height of the terrain covered by the tile.
      * @param {Rectangle} options.rectangle The rectangle containing the tile.
      * @param {Cartesian3} [options.center=Cartesian3.ZERO] The RTC center.
      * @param {Cesium3DTileBatchTable} options.batchTable The batch table for the tile containing the batched polylines.
-     * @param {Number[]} options.batchIds The batch ids for each polyline.
+     * @param {Uint16Array} options.batchIds The batch ids for each polyline.
      * @param {BoundingSphere} options.boundingVolume The bounding volume for the entire batch of polylines.
      *
      * @private
@@ -417,7 +417,7 @@ define([
         var batchTable = primitive._batchTable;
 
         var vsSource = batchTable.getVertexShaderCallback(false, 'a_batchId')(Vector3DTilePolylinesVS);
-        var fsSource = batchTable.getFragmentShaderCallback()(PolylineFS);
+        var fsSource = batchTable.getFragmentShaderCallback()(PolylineFS, false, undefined);
 
         var vs = new ShaderSource({
             defines : ['VECTOR_TILE'],
@@ -436,7 +436,7 @@ define([
         });
 
         vsSource = batchTable.getPickVertexShaderCallback('a_batchId')(Vector3DTilePolylinesVS);
-        fsSource = batchTable.getPickFragmentShaderCallback()(PolylineFS);
+        fsSource = batchTable.getPickFragmentShaderCallback()(PolylineFS, false, undefined);
 
         var pickVS = new ShaderSource({
             defines : ['VECTOR_TILE'],

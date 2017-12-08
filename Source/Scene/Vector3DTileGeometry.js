@@ -1,4 +1,5 @@
 define([
+        '../Core/arraySlice',
         '../Core/BoundingSphere',
         '../Core/Cartesian3',
         '../Core/Color',
@@ -9,9 +10,11 @@ define([
         '../Core/Matrix4',
         '../Core/TaskProcessor',
         '../ThirdParty/when',
+        './ClassificationType',
         './Vector3DTileBatch',
         './Vector3DTilePrimitive'
     ], function(
+        arraySlice,
         BoundingSphere,
         Cartesian3,
         Color,
@@ -22,10 +25,33 @@ define([
         Matrix4,
         TaskProcessor,
         when,
+        ClassificationType,
         Vector3DTileBatch,
         Vector3DTilePrimitive) {
     'use strict';
 
+    /**
+     * Creates a batch of box, cylinder, ellipsoid and/or sphere geometries intersecting terrain or 3D Tiles.
+     *
+     * @alias Vector3DTileGeometry
+     * @constructor
+     *
+     * @param {Object} options An object with following properties:
+     * @param {Float32Array} [options.boxes] The boxes in the tile.
+     * @param {Uint16Array} [options.boxBatchIds] The batch ids for each box.
+     * @param {Float32Array} [options.cylinders] The cylinders in the tile.
+     * @param {Uint16Array} [options.cylinderBatchIds] The batch ids for each cylinder.
+     * @param {Float32Array} [options.ellipsoids] The ellipsoids in the tile.
+     * @param {Uint16Array} [options.ellipsoidBatchIds] The batch ids for each ellipsoid.
+     * @param {Float32Array} [options.spheres] The spheres in the tile.
+     * @param {Uint16Array} [options.sphereBatchIds] The batch ids for each sphere.
+     * @param {Cartesian3} options.center The RTC center of all geometries.
+     * @param {Matrix4} options.modelMatrix The model matrix of all geometries. Applied after the individual geometry model matrices.
+     * @param {Cesium3DTileBatchTable} options.batchTable The batch table.
+     * @param {BoundingSphere} options.boundingVolume The bounding volume containing all of the geometry in the tile.
+     *
+     * @private
+     */
     function Vector3DTileGeometry(options) {
         // these will all be released after the primitive is created
         this._boxes = options.boxes;
@@ -71,11 +97,18 @@ define([
         this.debugWireframe = false;
 
         /**
-         * Forces a re-batch instead of waiting after a number of frames have been rendered.
+         * Forces a re-batch instead of waiting after a number of frames have been rendered. For testing only.
          * @type {Boolean}
          * @default false
          */
         this.forceRebatch = false;
+
+        /**
+         * What this tile will classify.
+         * @type {ClassificationType}
+         * @default ClassificationType.CESIUM_3D_TILE
+         */
+        this.classificationType = ClassificationType.CESIUM_3D_TILE;
     }
 
     defineProperties(Vector3DTileGeometry.prototype, {
@@ -207,23 +240,23 @@ define([
                 // Copy because they may be the views on the same buffer.
                 var length = 0;
                 if (defined(geometries._boxes)) {
-                    boxes = geometries._boxes = boxes.slice();
-                    boxBatchIds = geometries._boxBatchIds = boxBatchIds.slice();
+                    boxes = geometries._boxes = arraySlice(boxes);
+                    boxBatchIds = geometries._boxBatchIds = arraySlice(boxBatchIds);
                     length += boxBatchIds.length;
                 }
                 if (defined(geometries._cylinders)) {
-                    cylinders = geometries._cylinders = cylinders.slice();
-                    cylinderBatchIds = geometries._cylinderBatchIds = cylinderBatchIds.slice();
+                    cylinders = geometries._cylinders = arraySlice(cylinders);
+                    cylinderBatchIds = geometries._cylinderBatchIds = arraySlice(cylinderBatchIds);
                     length += cylinderBatchIds.length;
                 }
                 if (defined(geometries._ellipsoids)) {
-                    ellipsoids = geometries._ellipsoids = ellipsoids.slice();
-                    ellipsoidBatchIds = geometries._ellipsoidBatchIds = ellipsoidBatchIds.slice();
+                    ellipsoids = geometries._ellipsoids = arraySlice(ellipsoids);
+                    ellipsoidBatchIds = geometries._ellipsoidBatchIds = arraySlice(ellipsoidBatchIds);
                     length += ellipsoidBatchIds.length;
                 }
                 if (defined(geometries._spheres)) {
-                    spheres = geometries._sphere = spheres.slice();
-                    sphereBatchIds = geometries._sphereBatchIds = sphereBatchIds.slice();
+                    spheres = geometries._sphere = arraySlice(spheres);
+                    sphereBatchIds = geometries._sphereBatchIds = arraySlice(sphereBatchIds);
                     length += sphereBatchIds.length;
                 }
 
@@ -272,7 +305,7 @@ define([
                 return;
             }
 
-            when(verticesPromise, function(result) {
+            verticesPromise.then(function(result) {
                 var packedBuffer = new Float64Array(result.packedBuffer);
                 var indicesBytesPerElement = unpackBuffer(geometries, packedBuffer);
 
@@ -400,6 +433,7 @@ define([
 
         this._primitive.debugWireframe = this.debugWireframe;
         this._primitive.forceRebatch = this.forceRebatch;
+        this._primitive.classificationType = this.classificationType;
         this._primitive.update(frameState);
     };
 

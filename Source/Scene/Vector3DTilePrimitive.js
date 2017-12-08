@@ -21,6 +21,7 @@ define([
         '../Shaders/ShadowVolumeVS',
         './BlendingState',
         './Cesium3DTileFeature',
+        './ClassificationType',
         './DepthFunction',
         './Expression',
         './StencilFunction',
@@ -49,6 +50,7 @@ define([
         ShadowVolumeVS,
         BlendingState,
         Cesium3DTileFeature,
+        ClassificationType,
         DepthFunction,
         Expression,
         StencilFunction,
@@ -57,25 +59,24 @@ define([
     'use strict';
 
     /**
-     * Renders a batch of classification meshes.
+     * Creates a batch of classification meshes.
      *
      * @alias Vector3DTilePrimitive
      * @constructor
      *
      * @param {Object} options An object with following properties:
-     * @param {Float32Array|Uint16Array} options.positions The positions of the meshes.
+     * @param {Float32Array} options.positions The positions of the meshes.
      * @param {Uint16Array|Uint32Array} options.indices The indices of the triangulated meshes. The indices must be contiguous so that
      * the indices for mesh n are in [i, i + indexCounts[n]] where i = sum{indexCounts[0], indexCounts[n - 1]}.
-     * @param {Number[]} options.indexCounts The number of indices for each mesh.
-     * @param {Number[]} options.indexOffsets The offset into the index buffer for each mesh.
+     * @param {Uint32Array} options.indexCounts The number of indices for each mesh.
+     * @param {Uint32Array} options.indexOffsets The offset into the index buffer for each mesh.
      * @param {Vector3DTileBatch[]} options.batchedIndices The index offset and count for each batch with the same color.
      * @param {Cartesian3} [options.center=Cartesian3.ZERO] The RTC center.
      * @param {Cesium3DTileBatchTable} options.batchTable The batch table for the tile containing the batched meshes.
-     * @param {Number[]} options.batchIds The batch ids for each mesh.
+     * @param {Uint16Array} options.batchIds The batch ids for each mesh.
      * @param {Uint16Array} options.vertexBatchIds The batch id for each vertex.
      * @param {BoundingSphere} options.boundingVolume The bounding volume for the entire batch of meshes.
      * @param {BoundingSphere[]} options.boundingVolumes The bounding volume for each mesh.
-     * @param {Object} options.pickObject The object to return when picked.
      *
      * @private
      */
@@ -100,8 +101,6 @@ define([
         this._boundingVolumes = options.boundingVolumes;
 
         this._center = defaultValue(options.center, Cartesian3.ZERO);
-
-        this._pickObject = options.pickObject;
 
         this._va = undefined;
         this._sp = undefined;
@@ -143,11 +142,27 @@ define([
         this._debugWireframe = this.debugWireframe;
 
         /**
-         * Forces a re-batch instead of waiting after a number of frames have been rendered.
+         * Forces a re-batch instead of waiting after a number of frames have been rendered. For testing only.
          * @type {Boolean}
          * @default false
          */
         this.forceRebatch = false;
+
+        /**
+         * What this tile will classify.
+         * @type {ClassificationType}
+         * @default ClassificationType.CESIUM_3D_TILE
+         */
+        this.classificationType = ClassificationType.CESIUM_3D_TILE;
+        this._classificationType = this.classificationType;
+
+        this._batchIdLookUp = {};
+
+        var length = this._batchIds.length;
+        for (var i = 0; i < length; ++i) {
+            var batchId = this._batchIds[i];
+            this._batchIdLookUp[batchId] = i;
+        }
     }
 
     defineProperties(Vector3DTilePrimitive.prototype, {
@@ -252,7 +267,7 @@ define([
         var batchTable = primitive._batchTable;
 
         var vsSource = batchTable.getVertexShaderCallback(false, 'a_batchId')(ShadowVolumeVS);
-        var fsSource = batchTable.getFragmentShaderCallback()(ShadowVolumeFS);
+        var fsSource = batchTable.getFragmentShaderCallback()(ShadowVolumeFS, false, undefined);
 
         var vs = new ShaderSource({
             defines : ['VECTOR_TILE'],
@@ -453,19 +468,20 @@ define([
         };
     }
 
-    function copyIndicesCPU(indices, newIndices, currentOffset, offsets, counts, batchIds) {
+    function copyIndicesCPU(indices, newIndices, currentOffset, offsets, counts, batchIds, batchIdLookUp) {
         var sizeInBytes = indices.constructor.BYTES_PER_ELEMENT;
 
         var batchedIdsLength = batchIds.length;
         for (var j = 0; j < batchedIdsLength; ++j) {
             var batchedId = batchIds[j];
-            var offset = offsets[batchedId];
-            var count = counts[batchedId];
+            var index = batchIdLookUp[batchedId];
+            var offset = offsets[index];
+            var count = counts[index];
 
             var subarray = new indices.constructor(indices.buffer, sizeInBytes * offset, count);
             newIndices.set(subarray, currentOffset);
 
-            offsets[batchedId] = currentOffset;
+            offsets[index] = currentOffset;
             currentOffset += count;
         }
 
@@ -473,12 +489,17 @@ define([
     }
 
     function rebatchCPU(primitive, batchedIndices) {
-        var newIndices = new primitive._indices.constructor(primitive._indices.length);
+        var indices = primitive._indices;
+        var indexOffsets = primitive._indexOffsets;
+        var indexCounts = primitive._indexCounts;
+        var batchIdLookUp = primitive._batchIdLookUp;
+
+        var newIndices = new indices.constructor(indices.length);
 
         var current = batchedIndices.pop();
         var newBatchedIndices = [current];
 
-        var currentOffset = copyIndicesCPU(primitive._indices, newIndices, 0, primitive._indexOffsets, primitive._indexCounts, current.batchIds);
+        var currentOffset = copyIndicesCPU(indices, newIndices, 0, indexOffsets, indexCounts, current.batchIds, batchIdLookUp);
 
         current.offset = 0;
         current.count = currentOffset;
@@ -486,12 +507,12 @@ define([
         while (batchedIndices.length > 0) {
             var next = batchedIndices.pop();
             if (Color.equals(next.color, current.color)) {
-                currentOffset = copyIndicesCPU(primitive._indices, newIndices, currentOffset, primitive._indexOffsets, primitive._indexCounts, next.batchIds);
+                currentOffset = copyIndicesCPU(indices, newIndices, currentOffset, indexOffsets, indexCounts, next.batchIds, batchIdLookUp);
                 current.batchIds = current.batchIds.concat(next.batchIds);
                 current.count = currentOffset - current.offset;
             } else {
                 var offset = currentOffset;
-                currentOffset = copyIndicesCPU(primitive._indices, newIndices, currentOffset, primitive._indexOffsets, primitive._indexCounts, next.batchIds);
+                currentOffset = copyIndicesCPU(indices, newIndices, currentOffset, indexOffsets, indexCounts, next.batchIds, batchIdLookUp);
 
                 next.offset = offset;
                 next.count = currentOffset - offset;
@@ -506,18 +527,19 @@ define([
         primitive._batchedIndices = newBatchedIndices;
     }
 
-    function copyIndicesGPU(readBuffer, writeBuffer, currentOffset, offsets, counts, batchIds) {
+    function copyIndicesGPU(readBuffer, writeBuffer, currentOffset, offsets, counts, batchIds, batchIdLookUp) {
         var sizeInBytes = readBuffer.bytesPerIndex;
 
         var batchedIdsLength = batchIds.length;
         for (var j = 0; j < batchedIdsLength; ++j) {
             var batchedId = batchIds[j];
-            var offset = offsets[batchedId];
-            var count = counts[batchedId];
+            var index = batchIdLookUp[batchedId];
+            var offset = offsets[index];
+            var count = counts[index];
 
             writeBuffer.copyFromBuffer(readBuffer, offset * sizeInBytes, currentOffset * sizeInBytes, count * sizeInBytes);
 
-            offsets[batchedId] = currentOffset;
+            offsets[index] = currentOffset;
             currentOffset += count;
         }
 
@@ -525,13 +547,17 @@ define([
     }
 
     function rebatchGPU(primitive, batchedIndices) {
+        var indexOffsets = primitive._indexOffsets;
+        var indexCounts = primitive._indexCounts;
+        var batchIdLookUp = primitive._batchIdLookUp;
+
         var current = batchedIndices.pop();
         var newBatchedIndices = [current];
 
         var readBuffer = primitive._va.indexBuffer;
         var writeBuffer = primitive._vaSwap.indexBuffer;
 
-        var currentOffset = copyIndicesGPU(readBuffer, writeBuffer, 0, primitive._indexOffsets, primitive._indexCounts, current.batchIds);
+        var currentOffset = copyIndicesGPU(readBuffer, writeBuffer, 0, indexOffsets, indexCounts, current.batchIds, batchIdLookUp);
 
         current.offset = 0;
         current.count = currentOffset;
@@ -539,12 +565,12 @@ define([
         while (batchedIndices.length > 0) {
             var next = batchedIndices.pop();
             if (Color.equals(next.color, current.color)) {
-                currentOffset = copyIndicesGPU(readBuffer, writeBuffer, currentOffset, primitive._indexOffsets, primitive._indexCounts, next.batchIds);
+                currentOffset = copyIndicesGPU(readBuffer, writeBuffer, currentOffset, indexOffsets, indexCounts, next.batchIds, batchIdLookUp);
                 current.batchIds = current.batchIds.concat(next.batchIds);
                 current.count = currentOffset - current.offset;
             } else {
                 var offset = currentOffset;
-                currentOffset = copyIndicesGPU(readBuffer, writeBuffer, currentOffset, primitive._indexOffsets, primitive._indexCounts, next.batchIds);
+                currentOffset = copyIndicesGPU(readBuffer, writeBuffer, currentOffset, indexOffsets, indexCounts, next.batchIds, batchIdLookUp);
                 next.offset = offset;
                 next.count = currentOffset - offset;
                 newBatchedIndices.push(next);
@@ -612,27 +638,30 @@ define([
     }
 
     function createColorCommands(primitive, context) {
-        if (defined(primitive._commands) && !rebatchCommands(primitive, context) && primitive._commands.length / 3 === primitive._batchedIndices.length) {
+        var needsRebatch = rebatchCommands(primitive, context);
+
+        var commands = primitive._commands;
+        var batchedIndices = primitive._batchedIndices;
+        var length = batchedIndices.length;
+        var commandsLength = length * 3 * (primitive._classificationType === ClassificationType.BOTH ? 2 : 1);
+
+        if (defined(commands) &&
+            !needsRebatch &&
+            commands.length === commandsLength &&
+            primitive.classificationType === primitive._classificationType) {
             return;
         }
 
-        var batchedIndices = primitive._batchedIndices;
-        var length = batchedIndices.length;
-
-        var commands = primitive._commands;
-        commands.length = length * 3;
+        primitive._pickCommandsDirty = primitive._pickCommandsDirty || primitive._classificationType !== primitive.classificationType;
+        primitive._classificationType = primitive.classificationType;
+        commands.length = commandsLength;
 
         var vertexArray = primitive._va;
         var sp = primitive._sp;
         var modelMatrix = Matrix4.IDENTITY;
         var uniformMap = primitive._batchTable.getUniformMapCallback()(primitive._uniformMap);
         var bv = primitive._boundingVolume;
-        var pass = Pass.CESIUM_3D_TILE_CLASSIFICATION;
-
-        var owner = primitive._pickObject;
-        if (!defined(owner)) {
-            owner = primitive;
-        }
+        var pass = primitive._classificationType !== ClassificationType.TERRAIN ? Pass.CESIUM_3D_TILE_CLASSIFICATION : Pass.TERRAIN_CLASSIFICATION;
 
         for (var j = 0; j < length; ++j) {
             var offset = batchedIndices[j].offset;
@@ -641,7 +670,7 @@ define([
             var stencilPreloadCommand = commands[j * 3];
             if (!defined(stencilPreloadCommand)) {
                 stencilPreloadCommand = commands[j * 3] = new DrawCommand({
-                    owner : owner
+                    owner : primitive
                 });
             }
 
@@ -658,7 +687,7 @@ define([
             var stencilDepthCommand = commands[j * 3 + 1];
             if (!defined(stencilDepthCommand)) {
                 stencilDepthCommand = commands[j * 3 + 1] = new DrawCommand({
-                    owner : owner
+                    owner : primitive
                 });
             }
 
@@ -675,7 +704,7 @@ define([
             var colorCommand = commands[j * 3 + 2];
             if (!defined(colorCommand)) {
                 colorCommand = commands[j * 3 + 2] = new DrawCommand({
-                    owner : owner
+                    owner : primitive
                 });
             }
 
@@ -690,11 +719,26 @@ define([
             colorCommand.pass = pass;
         }
 
+        if (primitive._classificationType === ClassificationType.BOTH) {
+            length = length * 3;
+            for (var i = 0; i < length; ++i) {
+                var command = commands[i + length];
+                if (!defined(command)) {
+                    command = commands[i + length] = new DrawCommand();
+                }
+
+                DrawCommand.shallowClone(commands[i], command);
+                command.pass = Pass.TERRAIN_CLASSIFICATION;
+            }
+        }
+
         primitive._commandsDirty = true;
     }
 
     function createColorCommandsIgnoreShow(primitive, frameState) {
-        if (!frameState.invertClassification || (defined(primitive._commandsIgnoreShow) && !primitive._commandsDirty)) {
+        if (primitive._classificationType === ClassificationType.TERRAIN ||
+            !frameState.invertClassification ||
+            (defined(primitive._commandsIgnoreShow) && !primitive._commandsDirty)) {
             return;
         }
 
@@ -728,19 +772,14 @@ define([
 
         var length = primitive._indexOffsets.length;
         var pickCommands = primitive._pickCommands;
-        pickCommands.length = length * 3;
+        pickCommands.length = length * 3 * (primitive._classificationType === ClassificationType.BOTH ? 2 : 1);
 
         var vertexArray = primitive._va;
         var spStencil = primitive._spStencil;
         var spPick = primitive._spPick;
         var modelMatrix = Matrix4.IDENTITY;
         var uniformMap = primitive._batchTable.getPickUniformMapCallback()(primitive._uniformMap);
-        var pass = Pass.CESIUM_3D_TILE_CLASSIFICATION;
-
-        var owner = primitive._pickObject;
-        if (!defined(owner)) {
-            owner = primitive;
-        }
+        var pass = primitive._classificationType !== ClassificationType.TERRAIN ? Pass.CESIUM_3D_TILE_CLASSIFICATION : Pass.TERRAIN_CLASSIFICATION;
 
         for (var j = 0; j < length; ++j) {
             var offset = primitive._indexOffsets[j];
@@ -750,7 +789,7 @@ define([
             var stencilPreloadCommand = pickCommands[j * 3];
             if (!defined(stencilPreloadCommand)) {
                 stencilPreloadCommand = pickCommands[j * 3] = new DrawCommand({
-                    owner : owner
+                    owner : primitive
                 });
             }
 
@@ -767,7 +806,7 @@ define([
             var stencilDepthCommand = pickCommands[j * 3 + 1];
             if (!defined(stencilDepthCommand)) {
                 stencilDepthCommand = pickCommands[j * 3 + 1] = new DrawCommand({
-                    owner : owner
+                    owner : primitive
                 });
             }
 
@@ -784,7 +823,7 @@ define([
             var colorCommand = pickCommands[j * 3 + 2];
             if (!defined(colorCommand)) {
                 colorCommand = pickCommands[j * 3 + 2] = new DrawCommand({
-                    owner : owner
+                    owner : primitive
                 });
             }
 
@@ -797,6 +836,19 @@ define([
             colorCommand.uniformMap = uniformMap;
             colorCommand.boundingVolume = bv;
             colorCommand.pass = pass;
+        }
+
+        if (primitive._classificationType === ClassificationType.BOTH) {
+            length = length * 3;
+            for (var i = 0; i < length; ++i) {
+                var command = pickCommands[i + length];
+                if (!defined(command)) {
+                    command = pickCommands[i + length] = new DrawCommand();
+                }
+
+                DrawCommand.shallowClone(pickCommands[i], command);
+                command.pass = Pass.TERRAIN_CLASSIFICATION;
+            }
         }
 
         primitive._pickCommandsDirty = false;
@@ -842,7 +894,7 @@ define([
             feature.color = Color.WHITE;
         }
 
-        var batchedIndices = this._batchedIndices;
+        var batchedIndices = polygons._batchedIndices;
         length = batchedIndices.length;
 
         for (i = 0; i < length; ++i) {
@@ -914,8 +966,17 @@ define([
             return;
         }
 
-        var offset = this._indexOffsets[batchId];
-        var count = this._indexCounts[batchId];
+        var batchIdLookUp = this._batchIdLookUp;
+        var index = batchIdLookUp[batchId];
+        if (!defined(index)) {
+            return;
+        }
+
+        var indexOffsets = this._indexOffsets;
+        var indexCounts = this._indexCounts;
+
+        var offset = indexOffsets[index];
+        var count = indexCounts[index];
 
         var batchedIndices = this._batchedIndices;
         var length = batchedIndices.length;
@@ -949,7 +1010,8 @@ define([
                 continue;
             }
 
-            if (this._indexOffsets[id] < offset) {
+            var offsetIndex = batchIdLookUp[id];
+            if (indexOffsets[offsetIndex] < offset) {
                 startIds.push(id);
             } else {
                 endIds.push(id);

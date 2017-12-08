@@ -12,7 +12,6 @@ define([
         '../Core/Event',
         '../Core/getBaseUri',
         '../Core/getExtensionFromUri',
-        '../Core/Heap',
         '../Core/isDataUri',
         '../Core/joinUrls',
         '../Core/JulianDate',
@@ -28,10 +27,10 @@ define([
         './Cesium3DTile',
         './Cesium3DTileColorBlendMode',
         './Cesium3DTileOptimizations',
-        './Cesium3DTileRefine',
         './Cesium3DTilesetStatistics',
         './Cesium3DTilesetTraversal',
         './Cesium3DTileStyleEngine',
+        './ClassificationType',
         './LabelCollection',
         './SceneMode',
         './ShadowMode',
@@ -52,7 +51,6 @@ define([
         Event,
         getBaseUri,
         getExtensionFromUri,
-        Heap,
         isDataUri,
         joinUrls,
         JulianDate,
@@ -68,10 +66,10 @@ define([
         Cesium3DTile,
         Cesium3DTileColorBlendMode,
         Cesium3DTileOptimizations,
-        Cesium3DTileRefine,
         Cesium3DTilesetStatistics,
         Cesium3DTilesetTraversal,
         Cesium3DTileStyleEngine,
+        ClassificationType,
         LabelCollection,
         SceneMode,
         ShadowMode,
@@ -105,6 +103,8 @@ define([
      * @param {Number} [options.skipLevels=1] When <code>skipLevelOfDetail</code> is <code>true</code>, a constant defining the minimum number of levels to skip when loading tiles. When it is 0, no levels are skipped. Used in conjunction with <code>skipScreenSpaceErrorFactor</code> to determine which tiles to load.
      * @param {Boolean} [options.immediatelyLoadDesiredLevelOfDetail=false] When <code>skipLevelOfDetail</code> is <code>true</code>, only tiles that meet the maximum screen space error will ever be downloaded. Skipping factors are ignored and just the desired tiles are loaded.
      * @param {Boolean} [options.loadSiblings=false] When <code>skipLevelOfDetail</code> is <code>true</code>, determines whether siblings of visible tiles are always downloaded during traversal.
+     * @param {ClippingPlaneCollection} [options.clippingPlanes] The {@link ClippingPlaneCollection} used to selectively disable rendering the tileset.
+     * @param {ClassificationType} [options.classificationType=ClassificationType.CESIUM_3D_TILE] Determines whether terrain, 3D Tiles or both will be classified by vector tiles.
      * @param {Boolean} [options.debugFreezeFrame=false] For debugging only. Determines if only the tiles from last frame should be used for rendering.
      * @param {Boolean} [options.debugColorizeTiles=false] For debugging only. When true, assigns a random color to each tile.
      * @param {Boolean} [options.debugWireframe=false] For debugging only. When true, render's each tile's content as a wireframe.
@@ -521,6 +521,22 @@ define([
          * @default false
          */
         this.loadSiblings = defaultValue(options.loadSiblings, false);
+
+        /**
+         * The {@link ClippingPlaneCollection} used to selectively disable rendering the tileset.
+         *
+         * @type {ClippingPlaneCollection}
+         */
+        this.clippingPlanes = options.clippingPlanes;
+
+        /**
+         * Determines whether terrain, 3D Tiles or both will be classified by vector tiles.
+         * @type {ClassificationType}
+         * @default ClassificationType.CESIUM_3D_TILE
+         *
+         * @experimental This feature is using part of the 3D Tiles spec that is not final and is subject to change without Cesium's standard deprecation policy.
+         */
+        this.classificationType = defaultValue(options.classificationType, ClassificationType.CESIUM_3D_TILE);
 
         /**
          * This property is for debugging only; it is not optimized for production use.

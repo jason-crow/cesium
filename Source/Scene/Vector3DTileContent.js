@@ -6,11 +6,13 @@ define([
         '../Core/destroyObject',
         '../Core/DeveloperError',
         '../Core/Ellipsoid',
+        '../Core/FeatureDetection',
         '../Core/getMagic',
         '../Core/getStringFromTypedArray',
         '../Core/Math',
         '../Core/Matrix4',
         '../Core/Rectangle',
+        '../Core/RuntimeError',
         '../ThirdParty/when',
         './Cesium3DTileBatchTable',
         './Vector3DTileGeometry',
@@ -26,11 +28,13 @@ define([
         destroyObject,
         DeveloperError,
         Ellipsoid,
+        FeatureDetection,
         getMagic,
         getStringFromTypedArray,
         CesiumMath,
         Matrix4,
         Rectangle,
+        RuntimeError,
         when,
         Cesium3DTileBatchTable,
         Vector3DTileGeometry,
@@ -40,7 +44,20 @@ define([
         Vector3DTilePolylines) {
     'use strict';
 
+    // Bail out if the browser doesn't support typed arrays, to prevent the setup function
+    // from failing, since we won't be able to create a WebGL context anyway.
+    if (!FeatureDetection.supportsTypedArrays()) {
+        return {};
+    }
+
     /**
+     * Represents the contents of a
+     * {@link https://github.com/AnalyticalGraphicsInc/3d-tiles/blob/master/TileFormats/VectorData/README.md|Vector}
+     * tile in a {@link https://github.com/AnalyticalGraphicsInc/3d-tiles/blob/master/README.md|3D Tiles} tileset.
+     * <p>
+     * Implements the {@link Cesium3DTileContent} interface.
+     * </p>
+     *
      * @alias Vector3DTileContent
      * @constructor
      *
@@ -73,7 +90,7 @@ define([
 
     defineProperties(Vector3DTileContent.prototype, {
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#featuresLength
          */
         featuresLength : {
             get : function() {
@@ -82,7 +99,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#pointsLength
          */
         pointsLength : {
             get : function() {
@@ -94,7 +111,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#trianglesLength
          */
         trianglesLength : {
             get : function() {
@@ -116,7 +133,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#geometryByteLength
          */
         geometryByteLength : {
             get : function() {
@@ -138,7 +155,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#texturesByteLength
          */
         texturesByteLength : {
             get : function() {
@@ -150,7 +167,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#batchTableByteLength
          */
         batchTableByteLength : {
             get : function() {
@@ -159,7 +176,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#innerContents
          */
         innerContents : {
             get : function() {
@@ -168,7 +185,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#readyPromise
          */
         readyPromise : {
             get : function() {
@@ -177,7 +194,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#tileset
          */
         tileset : {
             get : function() {
@@ -186,7 +203,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#tile
          */
         tile : {
             get : function() {
@@ -195,7 +212,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#url
          */
         url : {
             get : function() {
@@ -204,7 +221,7 @@ define([
         },
 
         /**
-         * Part of the {@link Cesium3DTileContent} interface.
+         * @inheritdoc Cesium3DTileContent#batchTable
          */
         batchTable : {
             get : function() {
@@ -274,128 +291,86 @@ define([
 
         if (numberOfCylinders > 0 && defined(featureTableJson.CYLINDER_BATCH_IDS)) {
             var cylinderBatchIdsByteOffset = featureTableBinary.byteOffset + featureTableJson.CYLINDER_BATCH_IDS.byteOffset;
-            cylinderBatchIds = new Uint16Array(featureTableBinary.byteOffset, cylinderBatchIdsByteOffset, numberOfCylinders);
+            cylinderBatchIds = new Uint16Array(featureTableBinary.buffer, cylinderBatchIdsByteOffset, numberOfCylinders);
         }
 
         if (numberOfEllipsoids > 0 && defined(featureTableJson.ELLIPSOID_BATCH_IDS)) {
             var ellipsoidBatchIdsByteOffset = featureTableBinary.byteOffset + featureTableJson.ELLIPSOID_BATCH_IDS.byteOffset;
-            ellipsoidBatchIds = new Uint16Array(featureTableBinary.byteOffset, ellipsoidBatchIdsByteOffset, numberOfCylinders);
+            ellipsoidBatchIds = new Uint16Array(featureTableBinary.buffer, ellipsoidBatchIdsByteOffset, numberOfEllipsoids);
         }
 
         if (numberOfSpheres > 0 && defined(featureTableJson.SPHERE_BATCH_IDS)) {
             var sphereBatchIdsByteOffset = featureTableBinary.byteOffset + featureTableJson.SPHERE_BATCH_IDS.byteOffset;
-            sphereBatchIds = new Uint16Array(featureTableBinary.byteOffset, sphereBatchIdsByteOffset, numberOfCylinders);
+            sphereBatchIds = new Uint16Array(featureTableBinary.buffer, sphereBatchIdsByteOffset, numberOfSpheres);
         }
 
-        var undefinedBatchIds = !defined(polygonBatchIds) || !defined(polylineBatchIds) || !defined(pointBatchIds) || !defined(meshBatchIds);
-        undefinedBatchIds = undefinedBatchIds || !defined(boxBatchIds) || !defined(cylinderBatchIds) || !defined(ellipsoidBatchIds) || !defined(sphereBatchIds);
+        var atLeastOneDefined = defined(polygonBatchIds) || defined(polylineBatchIds) || defined(pointBatchIds) || defined(meshBatchIds);
+        atLeastOneDefined = atLeastOneDefined || defined(boxBatchIds) || defined(cylinderBatchIds) || defined(ellipsoidBatchIds) || defined(sphereBatchIds);
 
-        if (undefinedBatchIds) {
-            var maxId = -1;
+        var atLeastOneUndefined = (numberOfPolygons > 0 && !defined(polygonBatchIds)) ||
+                                  (numberOfPolylines > 0 && !defined(polylineBatchIds)) ||
+                                  (numberOfPoints > 0 && !defined(pointBatchIds)) ||
+                                  (numberOfMeshes > 0 && !defined(meshBatchIds)) ||
+                                  (numberOfBoxes > 0 && !defined(boxBatchIds)) ||
+                                  (numberOfCylinders > 0 && !defined(cylinderBatchIds)) ||
+                                  (numberOfEllipsoids > 0 && !defined(ellipsoidBatchIds)) ||
+                                  (numberOfSpheres > 0 && !defined(sphereBatchIds));
 
-            if (defined(polygonBatchIds)) {
-                for (i = 0; i < numberOfPolygons; ++i) {
-                    maxId = Math.max(maxId, polygonBatchIds[i]);
-                }
-            }
+        if (atLeastOneDefined && atLeastOneUndefined) {
+            throw new RuntimeError('If one group of batch ids is defined, then all batch ids must be defined.');
+        }
 
-            if (defined(polylineBatchIds)) {
-                for (i = 0; i < numberOfPolylines; ++i) {
-                    maxId = Math.max(maxId, polylineBatchIds[i]);
-                }
-            }
+        var allUndefinedBatchIds = !defined(polygonBatchIds) && !defined(polylineBatchIds) && !defined(pointBatchIds) && !defined(meshBatchIds);
+        allUndefinedBatchIds = allUndefinedBatchIds && !defined(boxBatchIds) && !defined(cylinderBatchIds) && !defined(ellipsoidBatchIds) && !defined(sphereBatchIds);
 
-            if (defined(pointBatchIds)) {
-                for (i = 0; i < numberOfPoints; ++i) {
-                    maxId = Math.max(maxId, pointBatchIds[i]);
-                }
-            }
-
-            if (defined(meshBatchIds)) {
-                for (i = 0; i < numberOfMeshes; ++i) {
-                    maxId = Math.max(maxId, meshBatchIds[i]);
-                }
-            }
-
-            if (defined(boxBatchIds)) {
-                for (i = 0; i < numberOfBoxes; ++i) {
-                    maxId = Math.max(maxId, boxBatchIds[i]);
-                }
-            }
-
-            if (defined(cylinderBatchIds)) {
-                for (i = 0; i < numberOfCylinders; ++i) {
-                    maxId = Math.max(maxId, cylinderBatchIds[i]);
-                }
-            }
-
-            if (defined(ellipsoidBatchIds)) {
-                for (i = 0; i < numberOfEllipsoids; ++i) {
-                    maxId = Math.max(maxId, ellipsoidBatchIds[i]);
-                }
-            }
-
-            if (defined(sphereBatchIds)) {
-                for (i = 0; i < numberOfSpheres; ++i) {
-                    maxId = Math.max(maxId, sphereBatchIds[i]);
-                }
-            }
-
-            maxId = maxId + 1;
-
+        if (allUndefinedBatchIds) {
+            var id = 0;
             if (!defined(polygonBatchIds) && numberOfPolygons > 0) {
                 polygonBatchIds = new Uint16Array(numberOfPolygons);
                 for (i = 0; i < numberOfPolygons; ++i) {
-                    polygonBatchIds[i] = maxId++;
+                    polygonBatchIds[i] = id++;
                 }
             }
-
             if (!defined(polylineBatchIds) && numberOfPolylines > 0) {
                 polylineBatchIds = new Uint16Array(numberOfPolylines);
                 for (i = 0; i < numberOfPolylines; ++i) {
-                    polylineBatchIds[i] = maxId++;
+                    polylineBatchIds[i] = id++;
                 }
             }
-
             if (!defined(pointBatchIds) && numberOfPoints > 0) {
                 pointBatchIds = new Uint16Array(numberOfPoints);
                 for (i = 0; i < numberOfPoints; ++i) {
-                    pointBatchIds[i] = maxId++;
+                    pointBatchIds[i] = id++;
                 }
             }
-
             if (!defined(meshBatchIds) && numberOfMeshes > 0) {
                 meshBatchIds = new Uint16Array(numberOfMeshes);
                 for (i = 0; i < numberOfMeshes; ++i) {
-                    meshBatchIds[i] = maxId++;
+                    meshBatchIds[i] = id++;
                 }
             }
-
             if (!defined(boxBatchIds) && numberOfBoxes > 0) {
                 boxBatchIds = new Uint16Array(numberOfBoxes);
                 for (i = 0; i < numberOfBoxes; ++i) {
-                    boxBatchIds[i] = maxId++;
+                    boxBatchIds[i] = id++;
                 }
             }
-
             if (!defined(cylinderBatchIds) && numberOfCylinders > 0) {
                 cylinderBatchIds = new Uint16Array(numberOfCylinders);
                 for (i = 0; i < numberOfCylinders; ++i) {
-                    cylinderBatchIds[i] = maxId++;
+                    cylinderBatchIds[i] = id++;
                 }
             }
-
             if (!defined(ellipsoidBatchIds) && numberOfEllipsoids > 0) {
                 ellipsoidBatchIds = new Uint16Array(numberOfEllipsoids);
                 for (i = 0; i < numberOfEllipsoids; ++i) {
-                    ellipsoidBatchIds[i] = maxId++;
+                    ellipsoidBatchIds[i] = id++;
                 }
             }
-
             if (!defined(sphereBatchIds) && numberOfSpheres > 0) {
                 sphereBatchIds = new Uint16Array(numberOfSpheres);
                 for (i = 0; i < numberOfSpheres; ++i) {
-                    sphereBatchIds[i] = maxId++;
+                    sphereBatchIds[i] = id++;
                 }
             }
         }
@@ -419,20 +394,13 @@ define([
         byteOffset = defaultValue(byteOffset, 0);
 
         var uint8Array = new Uint8Array(arrayBuffer);
-        var magic = getMagic(uint8Array, byteOffset);
-        if (magic !== 'vctr') {
-            throw new DeveloperError('Invalid Vector tile.  Expected magic=vctr.  Read magic=' + magic);
-        }
-
         var view = new DataView(arrayBuffer);
         byteOffset += sizeOfUint32;  // Skip magic number
 
-        //>>includeStart('debug', pragmas.debug);
         var version = view.getUint32(byteOffset, true);
         if (version !== 1) {
-            throw new DeveloperError('Only Vector tile version 1 is supported.  Version ' + version + ' is not.');
+            throw new RuntimeError('Only Vector tile version 1 is supported.  Version ' + version + ' is not.');
         }
-        //>>includeEnd('debug');
         byteOffset += sizeOfUint32;
 
         var byteLength = view.getUint32(byteOffset, true);
@@ -446,11 +414,9 @@ define([
         var featureTableJSONByteLength = view.getUint32(byteOffset, true);
         byteOffset += sizeOfUint32;
 
-        //>>includeStart('debug', pragmas.debug);
         if (featureTableJSONByteLength === 0) {
-            throw new DeveloperError('Feature table must have a byte length greater than zero');
+            throw new RuntimeError('Feature table must have a byte length greater than zero');
         }
-        //>>includeEnd('debug');
 
         var featureTableBinaryByteLength = view.getUint32(byteOffset, true);
         byteOffset += sizeOfUint32;
@@ -518,13 +484,11 @@ define([
         if (defined(featureTableJson.RECTANGLE)) {
             rectangle = Rectangle.unpack(featureTableJson.RECTANGLE);
         } else {
-            rectangle = content._tile.contentBoundingVolume.rectangle;
+            throw new RuntimeError('Rectangle is required in the feature table.');
         }
 
         var minHeight = featureTableJson.MINIMUM_HEIGHT;
         var maxHeight = featureTableJson.MAXIMUM_HEIGHT;
-        var format = defaultValue(featureTableJson.FORMAT, 0);
-        var isCartographic = format === 0;
         var modelMatrix = content._tile.computedTransform;
 
         var center;
@@ -533,22 +497,13 @@ define([
             Matrix4.multiplyByPoint(modelMatrix, center, center);
         } else {
             center = Rectangle.center(rectangle);
-            if (isCartographic) {
-                center.height = CesiumMath.lerp(minHeight, maxHeight, 0.5);
-                center = Ellipsoid.WGS84.cartographicToCartesian(center);
-            } else {
-                center = Cartesian3.fromElements(center.longitude, center.latitude, 0.0);
-                center.z = CesiumMath.lerp(minHeight, maxHeight, 0.5);
-            }
-            Matrix4.multiplyByPoint(modelMatrix, center, center);
+            center.height = CesiumMath.lerp(minHeight, maxHeight, 0.5);
+            center = Ellipsoid.WGS84.cartographicToCartesian(center);
         }
 
         var batchIds = getBatchIds(featureTableJson, featureTableBinary);
 
-        var pickObject = {
-            content : content,
-            primitive : content._tileset
-        };
+        byteOffset += byteOffset % 4;
 
         if (numberOfPolygons > 0) {
             var indices = new Uint32Array(arrayBuffer, byteOffset, indicesByteLength / sizeOfUint32);
@@ -587,8 +542,6 @@ define([
                 boundingVolume : content._tile._boundingVolume.boundingVolume,
                 batchTable : batchTable,
                 batchIds : batchIds.polygons,
-                pickObject : pickObject,
-                isCartographic : isCartographic,
                 modelMatrix : modelMatrix
             });
         }
@@ -731,14 +684,14 @@ define([
     }
 
     /**
-     * Part of the {@link Cesium3DTileContent} interface.
+     * @inheritdoc Cesium3DTileContent#hasProperty
      */
     Vector3DTileContent.prototype.hasProperty = function(batchId, name) {
         return this._batchTable.hasProperty(batchId, name);
     };
 
     /**
-     * Part of the {@link Cesium3DTileContent} interface.
+     * @inheritdoc Cesium3DTileContent#getFeature
      */
     Vector3DTileContent.prototype.getFeature = function(batchId) {
         //>>includeStart('debug', pragmas.debug);
@@ -753,7 +706,7 @@ define([
     };
 
     /**
-     * Part of the {@link Cesium3DTileContent} interface.
+     * @inheritdoc Cesium3DTileContent#applyDebugSettings
      */
     Vector3DTileContent.prototype.applyDebugSettings = function(enabled, color) {
         if (defined(this._polygons)) {
@@ -774,7 +727,7 @@ define([
     };
 
     /**
-     * Part of the {@link Cesium3DTileContent} interface.
+     * @inheritdoc Cesium3DTileContent#applyStyle
      */
     Vector3DTileContent.prototype.applyStyle = function(frameState, style) {
         createFeatures(this);
@@ -796,13 +749,14 @@ define([
     };
 
     /**
-     * Part of the {@link Cesium3DTileContent} interface.
+     * @inheritdoc Cesium3DTileContent#update
      */
     Vector3DTileContent.prototype.update = function(tileset, frameState) {
         if (defined(this._batchTable)) {
             this._batchTable.update(tileset, frameState);
         }
         if (defined(this._polygons)) {
+            this._polygons.classificationType = this._tileset.classificationType;
             this._polygons.update(frameState);
         }
         if (defined(this._polylines)) {
@@ -812,10 +766,12 @@ define([
             this._points.update(frameState);
         }
         if (defined(this._meshes)) {
+            this._meshes.classificationType = this._tileset.classificationType;
             this._meshes.debugWireframe = this._tileset.debugWireframe;
             this._meshes.update(frameState);
         }
         if (defined(this._geometries)) {
+            this._geometries.classificationType = this._tileset.classificationType;
             this._geometries.debugWireframe = this._tileset.debugWireframe;
             this._geometries.update(frameState);
         }
@@ -835,14 +791,14 @@ define([
     };
 
     /**
-     * Part of the {@link Cesium3DTileContent} interface.
+     * @inheritdoc Cesium3DTileContent#isDestroyed
      */
     Vector3DTileContent.prototype.isDestroyed = function() {
         return false;
     };
 
     /**
-     * Part of the {@link Cesium3DTileContent} interface.
+     * @inheritdoc Cesium3DTileContent#destroy
      */
     Vector3DTileContent.prototype.destroy = function() {
         this._polygons = this._polygons && this._polygons.destroy();

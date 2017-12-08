@@ -12,6 +12,7 @@ define([
         '../Core/Rectangle',
         '../Core/TaskProcessor',
         '../ThirdParty/when',
+        './ClassificationType',
         './Vector3DTileBatch',
         './Vector3DTilePrimitive'
     ], function(
@@ -28,12 +29,13 @@ define([
         Rectangle,
         TaskProcessor,
         when,
+        ClassificationType,
         Vector3DTileBatch,
         Vector3DTilePrimitive) {
     'use strict';
 
     /**
-     * Renders a batch of pre-triangulated polygons draped on terrain.
+     * Creates a batch of pre-triangulated polygons draped on terrain and/or 3D Tiles.
      *
      * @alias Vector3DTilePolygons
      * @constructor
@@ -42,10 +44,10 @@ define([
      * @param {Float32Array|Uint16Array} options.positions The positions of the polygons. The positions must be contiguous
      * so that the positions for polygon n are in [c, c + counts[n]] where c = sum{counts[0], counts[n - 1]} and they are the outer ring of
      * the polygon in counter-clockwise order.
-     * @param {Number[]} options.counts The number or positions in the each polygon.
-     * @param {Uint16Array|Uint32Array} options.indices The indices of the triangulated polygons. The indices must be contiguous so that
+     * @param {Uint32Array} options.counts The number of positions in the each polygon.
+     * @param {Uint32Array} options.indices The indices of the triangulated polygons. The indices must be contiguous so that
      * the indices for polygon n are in [i, i + indexCounts[n]] where i = sum{indexCounts[0], indexCounts[n - 1]}.
-     * @param {Number[]} options.indexCounts The number of indices for each polygon.
+     * @param {Uint32Array} options.indexCounts The number of indices for each polygon.
      * @param {Number} options.minimumHeight The minimum height of the terrain covered by the tile.
      * @param {Number} options.maximumHeight The maximum height of the terrain covered by the tile.
      * @param {Float32Array} [options.polygonMinimumHeights] An array containing the minimum heights for each polygon.
@@ -54,7 +56,7 @@ define([
      * @param {Ellipsoid} [options.ellipsoid=Ellipsoid.WGS84] The ellipsoid.
      * @param {Cartesian3} [options.center=Cartesian3.ZERO] The RTC center.
      * @param {Cesium3DTileBatchTable} options.batchTable The batch table for the tile containing the batched polygons.
-     * @param {Number[]} options.batchIds The batch ids for each polygon.
+     * @param {Uint16Array} options.batchIds The batch ids for each polygon.
      * @param {BoundingSphere} options.boundingVolume The bounding volume for the entire batch of polygons.
      *
      * @private
@@ -86,15 +88,13 @@ define([
         this._polygonMaximumHeights = options.polygonMaximumHeights;
         this._center = defaultValue(options.center, Cartesian3.ZERO);
         this._rectangle = options.rectangle;
-        this._isCartographic = options.isCartographic;
-        this._modelMatrix = defaultValue(options.modelMatrix, Matrix4.IDENTITY);
+
+        this._center = undefined;
 
         this._boundingVolume = options.boundingVolume;
         this._boundingVolumes = undefined;
 
         this._batchedIndices = undefined;
-
-        this._pickObject = options.pickObject;
 
         this._ready = false;
         this._readyPromise = when.defer();
@@ -111,11 +111,18 @@ define([
         this.debugWireframe = false;
 
         /**
-         * Forces a re-batch instead of waiting after a number of frames have been rendered.
+         * Forces a re-batch instead of waiting after a number of frames have been rendered. For testing only.
          * @type {Boolean}
          * @default false
          */
         this.forceRebatch = false;
+
+        /**
+         * What this tile will classify.
+         * @type {ClassificationType}
+         * @default ClassificationType.CESIUM_3D_TILE
+         */
+        this.classificationType = ClassificationType.CESIUM_3D_TILE;
     }
 
     defineProperties(Vector3DTilePolygons.prototype, {
@@ -167,7 +174,7 @@ define([
     });
 
     function packBuffer(polygons) {
-        var packedBuffer = new Float64Array(4 + Cartesian3.packedLength + Ellipsoid.packedLength + Rectangle.packedLength + Matrix4.packedLength);
+        var packedBuffer = new Float64Array(3 + Cartesian3.packedLength + Ellipsoid.packedLength + Rectangle.packedLength);
 
         var offset = 0;
         packedBuffer[offset++] = polygons._indices.BYTES_PER_ELEMENT;
@@ -182,11 +189,6 @@ define([
         offset += Ellipsoid.packedLength;
 
         Rectangle.pack(polygons._rectangle, packedBuffer, offset);
-        offset += Rectangle.packedLength;
-
-        packedBuffer[offset++] = polygons._isCartographic ? 1.0 : 0.0;
-
-        Matrix4.pack(polygons._modelMatrix, packedBuffer, offset);
 
         return packedBuffer;
     }
@@ -253,6 +255,8 @@ define([
                 counts = polygons._counts = polygons._counts.slice();
                 indexCounts = polygons._indexCounts= polygons._indexCounts.slice();
                 indices = polygons._indices = polygons._indices.slice();
+
+                polygons._center = polygons._ellipsoid.cartographicToCartesian(Rectangle.center(polygons._rectangle));
 
                 batchIds = polygons._transferrableBatchIds = new Uint32Array(polygons._batchIds);
                 batchTableColors = polygons._batchTableColors = new Uint32Array(batchIds.length);
@@ -326,8 +330,7 @@ define([
                 batchedIndices : polygons._batchedIndices,
                 boundingVolume : polygons._boundingVolume,
                 boundingVolumes : polygons._boundingVolumes,
-                center : polygons._center,
-                pickObject : defaultValue(polygons._pickObject, polygons)
+                center : polygons._center
             });
 
             polygons._batchTable = undefined;
@@ -349,12 +352,9 @@ define([
             polygons._polygonMaximumHeights = undefined;
             polygons._center = undefined;
             polygons._rectangle = undefined;
-            polygons._isCartographic = undefined;
-            polygons._modelMatrix = undefined;
             polygons._boundingVolume = undefined;
             polygons._boundingVolumes = undefined;
             polygons._batchedIndices = undefined;
-            polygons._pickObject = undefined;
             polygons._verticesPromise = undefined;
 
             polygons._readyPromise.resolve();
@@ -417,6 +417,7 @@ define([
 
         this._primitive.debugWireframe = this.debugWireframe;
         this._primitive.forceRebatch = this.forceRebatch;
+        this._primitive.classificationType = this.classificationType;
         this._primitive.update(frameState);
     };
 
