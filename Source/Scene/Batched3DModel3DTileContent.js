@@ -1,4 +1,5 @@
 define([
+        '../Core/ClippingPlaneCollection',
         '../Core/Color',
         '../Core/defaultValue',
         '../Core/defined',
@@ -17,10 +18,10 @@ define([
         './Cesium3DTileFeature',
         './Cesium3DTileFeatureTable',
         './ClassificationModel',
-        './ClippingPlaneCollection',
-        './getAttributeOrUniformBySemantic',
-        './Model'
+        './Model',
+        './ModelUtility'
     ], function(
+        ClippingPlaneCollection,
         Color,
         defaultValue,
         defined,
@@ -39,9 +40,8 @@ define([
         Cesium3DTileFeature,
         Cesium3DTileFeatureTable,
         ClassificationModel,
-        ClippingPlaneCollection,
-        getAttributeOrUniformBySemantic,
-        Model) {
+        Model,
+        ModelUtility) {
     'use strict';
 
     // Bail out if the browser doesn't support typed arrays, to prevent the setup function
@@ -195,9 +195,9 @@ define([
     var sizeOfUint32 = Uint32Array.BYTES_PER_ELEMENT;
 
     function getBatchIdAttributeName(gltf) {
-        var batchIdAttributeName = getAttributeOrUniformBySemantic(gltf, '_BATCHID');
+        var batchIdAttributeName = ModelUtility.getAttributeOrUniformBySemantic(gltf, '_BATCHID');
         if (!defined(batchIdAttributeName)) {
-            batchIdAttributeName = getAttributeOrUniformBySemantic(gltf, 'BATCHID');
+            batchIdAttributeName = ModelUtility.getAttributeOrUniformBySemantic(gltf, 'BATCHID');
             if (defined(batchIdAttributeName)) {
                 Batched3DModel3DTileContent._deprecationWarning('b3dm-legacy-batchid', 'The glTF in this b3dm uses the semantic `BATCHID`. Application-specific semantics should be prefixed with an underscore: `_BATCHID`.');
             }
@@ -235,7 +235,7 @@ define([
             var diffuseUniformName = getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE', programId);
             var callback = batchTable.getFragmentShaderCallback(true, diffuseUniformName);
             var handleTranslucent = !defined(content._tileset.classificationType);
-            var diffuseUniformName = getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE');
+            var diffuseUniformName = ModelUtility.getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE');
             var callback = batchTable.getFragmentShaderCallback(handleTranslucent, diffuseUniformName);
             return defined(callback) ? callback(fs) : fs;
         };
@@ -504,10 +504,12 @@ define([
 
         // Update clipping planes
         var tilesetClippingPlanes = this._tileset.clippingPlanes;
+        var modelClippingPlanes = this._model.clippingPlanes;
         if (defined(tilesetClippingPlanes)) {
-            var modelClippingPlanes = this._model.clippingPlanes;
             tilesetClippingPlanes.clone(modelClippingPlanes);
             modelClippingPlanes.enabled = tilesetClippingPlanes.enabled && this._tile._isClipped;
+        } else if (defined(modelClippingPlanes) && modelClippingPlanes.enabled) {
+            modelClippingPlanes.enabled = false;
         }
 
         this._model.update(frameState);
