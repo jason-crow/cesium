@@ -340,7 +340,7 @@ define([
 
             if (usesBatchTable) {
                 var gltf = collection._model.gltf;
-                var diffuseUniformName = getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE', programId);
+                var diffuseUniformName = ModelUtility.getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE', programId);
                 instancedSource = collection._batchTable.getVertexShaderCallback(true, 'a_batchId', diffuseUniformName)(instancedSource);
             }
 
@@ -353,11 +353,7 @@ define([
             var batchTable = collection._batchTable;
             if (defined(batchTable)) {
                 var gltf = collection._model.gltf;
-<<<<<<< HEAD
-                var diffuseUniformName = getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE', programId);
-=======
                 var diffuseUniformName = ModelUtility.getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE');
->>>>>>> 7d27a232745c1a87c9ddb415e39d3ee67cd64a82
                 fs = batchTable.getFragmentShaderCallback(true, diffuseUniformName)(fs);
             }
             return fs;
@@ -440,7 +436,7 @@ define([
         return function(vs, programId) {
             if (defined(collection._batchTable)) {
                 var gltf = collection._model.gltf;
-                var diffuseUniformName = getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE', programId);
+                var diffuseUniformName = ModelUtility.getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE', programId);
                 vs = collection._batchTable.getVertexShaderCallback(true, 'a_batchId', diffuseUniformName)(vs);
                 // Treat a_batchId as a uniform rather than a vertex attribute
                 vs = 'uniform float a_batchId\n;' + vs;

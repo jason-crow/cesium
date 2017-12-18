@@ -211,7 +211,7 @@ define([
             var gltf = content._model.gltf;
             var handleTranslucent = !defined(content._tileset.classificationType);
             var batchIdAttributeName = getBatchIdAttributeName(gltf);
-            var diffuseUniformName = getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE', programId);
+            var diffuseUniformName = ModelUtility.getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE', programId);
             var callback = batchTable.getVertexShaderCallback(true, batchIdAttributeName, diffuseUniformName);
             var callback = batchTable.getVertexShaderCallback(handleTranslucent, batchIdAttributeName);
             return defined(callback) ? callback(vs) : vs;
@@ -232,7 +232,7 @@ define([
         return function(fs, programId) {
             var batchTable = content._batchTable;
             var gltf = content._model.gltf;
-            var diffuseUniformName = getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE', programId);
+            var diffuseUniformName = ModelUtility.getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE', programId);
             var callback = batchTable.getFragmentShaderCallback(true, diffuseUniformName);
             var handleTranslucent = !defined(content._tileset.classificationType);
             var diffuseUniformName = ModelUtility.getAttributeOrUniformBySemantic(gltf, '_3DTILESDIFFUSE');
